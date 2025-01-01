@@ -13980,7 +13980,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" "↑φ3.2, 4mm"
 			(at 146.05 44.45 0)
 			(effects
 				(font
@@ -15338,7 +15338,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" "https://akizukidenshi.com/catalog/g/g101861/"
 			(at 146.05 29.21 0)
 			(effects
 				(font
@@ -18458,7 +18458,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" "https://akizukidenshi.com/catalog/g/g103583/"
 			(at 146.05 34.29 0)
 			(effects
 				(font
@@ -21230,7 +21230,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" "https://www.monotaro.com/g/00275648/"
 			(at 146.05 39.37 0)
 			(effects
 				(font
