@@ -6,7 +6,7 @@ hardware/*/*.bak
 hardware/*/fp-info-cache
 hardware/*/*.lck
 
-software/NERD_BOY/_build/*
-!software/NERD_BOY/_build/src
-software/NERD_BOY/_build/src/*
+software/_build/*
+!software/_build/src
+software/_build/src/*
 !nerd_boy.uf2
