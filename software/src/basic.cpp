@@ -32,7 +32,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.0.0"
+#define STR_VERSION "1.0.1"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -145,6 +145,9 @@ const unsigned char i_nsa[] = {
   I_CLS,
   I_GCLS,
   I_VSYNC,
+#endif
+#ifdef _IOEXP_
+  I_GETKEY,
 #endif
   I_ARRAY, I_RND, I_ABS, I_SIZE
 };
