@@ -10,19 +10,20 @@
 
 // 8ビットの塊が縦方向に6個、横方向に128個あるイメージ、上のドットは下位ビット
 volatile uint8_t v_buf[8][128];
+// グラフィック画面用バッファ
+volatile uint8_t vg_buf[8][128];
 
 volatile unsigned long current_frame = 0;
 
-volatile static bool flg_vsync = false;
+volatile bool flg_vsync = false;
 
 static uint8_t x_cursor = 0;
 static uint8_t y_cursor = 0;
+static uint8_t count_candel = 0; // print_c_autoでdelが来た際に文字が何個消去できるかのカウント
 
 uint8_t c_code_prev = '0';
 
 void lcd_init(){
-
-    spi_init(spi0, 8000000);
 
     lcd_write_command(0b10101110); // Display = OFF
     lcd_write_command(0b10100000); // ADC = normal
@@ -48,7 +49,8 @@ void lcd_init(){
     lcd_write_command(0b10101111); // Display = ON
 
     // 画面のクリア
-    lcd_cls(white);
+    lcd_cls(white, text);
+    lcd_cls(white, graphic);
 
     lcd_start_disp_vbuf_timer();
 
@@ -60,7 +62,7 @@ void lcd_write_command(uint8_t cmd){
     gpio_put(PIN_LCD_RS, 0);
     uint8_t src[1];
     src[0] = cmd;
-    spi_write_blocking(spi0, src, 1);
+    spi_write_blocking(spi1, src, 1);
     gpio_put(PIN_LCD_CS, 1);
 
 }
@@ -71,7 +73,7 @@ void lcd_write_data(uint8_t data){
     gpio_put(PIN_LCD_RS, 1);
     uint8_t src[1];
     src[0] = data;
-    spi_write_blocking(spi0, src, 1);
+    spi_write_blocking(spi1, src, 1);
     gpio_put(PIN_LCD_CS, 1);
 
 }
@@ -81,14 +83,16 @@ void lcd_set_cursor(uint8_t x_sec, uint8_t y_sec){
     y_cursor = y_sec;
 }
 
-void lcd_cls(color cl){
+void lcd_cls(color cl, screen sc){
 
     for(int i=0; i<8; i++){
         for(int j=0; j<128; j++){
             if(cl){
-                v_buf[i][j] = 0b11111111;
+                if(sc == text) v_buf[i][j] = 0b11111111;
+                else if(sc == graphic) vg_buf[i][j] = 0b11111111;
             } else {
-                v_buf[i][j] = 0b00000000;
+                if(sc == text) v_buf[i][j] = 0b00000000;
+                else if(sc == graphic) vg_buf[i][j] = 0b00000000;
             }
         }
     }
@@ -105,16 +109,16 @@ void lcd_disp_vbuf(){
 
         gpio_put(PIN_LCD_RS, 0); // コマンドの送信
         src[0] = 0b10110000+i; // ページアドレスの設定
-        spi_write_blocking(spi0, src, 1);
+        spi_write_blocking(spi1, src, 1);
         src[0] = 0b00010000; // コラムアドレスの設定(上位桁)
-        spi_write_blocking(spi0, src, 1);
+        spi_write_blocking(spi1, src, 1);
         src[0] = 0b00000000; // コラムアドレスの設定(下位桁)
-        spi_write_blocking(spi0, src, 1);
+        spi_write_blocking(spi1, src, 1);
 
         gpio_put(PIN_LCD_RS, 1); // ディスプレイデータの送信
         for(int j=0; j<128; j++){
-            src[0] = v_buf[i][j];
-            spi_write_blocking(spi0, src, 1);
+            src[0] = v_buf[i][j] | vg_buf[i][j];
+            spi_write_blocking(spi1, src, 1);
         }
 
     }
@@ -161,7 +165,7 @@ void lcd_slide_vbuf(scroll_dir dir, color cl){
 }
 
 // x_pos(0~127), y_pos(0~47), cl(white, black)
-void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl){
+void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl, screen sc){
 
     if(x_pos > 127 || y_pos > 63) return; // 画面外のドットは打たない
 
@@ -177,10 +181,13 @@ void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl){
 
     // ドットの色を指定し、バッファと論理演算する
     if(cl){
-        v_buf[page][x_pos] |= dot_extract;
+        if(sc == text) v_buf[page][x_pos] |= dot_extract;
+        else if(sc == graphic) vg_buf[page][x_pos] |= dot_extract;
     } else {
         dot_extract = ~dot_extract;
-        v_buf[page][x_pos] &= dot_extract;
+        if(sc == text) v_buf[page][x_pos] &= dot_extract;
+        else if(sc == graphic) vg_buf[page][x_pos] &= dot_extract;
+
     }
 
 }
@@ -222,9 +229,9 @@ void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, co
 
     for(x=x_pos0; x<=x_pos1; x++){ // 次の点が直線の上にあるのか下にあるのか判定して点を打つ
         if(steep){
-            lcd_pset(y, x, cl);
+            lcd_pset(y, x, cl, graphic);
         } else {
-            lcd_pset(x, y, cl);
+            lcd_pset(x, y, cl, graphic);
         }
         error += delta_y;
         if((error << 1) >= delta_x){ // この式が成り立てば、次の点はy_step分移動する
@@ -241,14 +248,14 @@ void lcd_circle(uint8_t x_pos, uint8_t y_pos, uint8_t rad, color cl, bool fill){
     int y = 0;
     int F = -2 * rad + 3;
     while(x >= y){
-        lcd_pset(x_pos+x, y_pos+y, cl);
-        lcd_pset(x_pos-x, y_pos+y, cl);
-        lcd_pset(x_pos+x, y_pos-y, cl);
-        lcd_pset(x_pos-x, y_pos-y, cl);
-        lcd_pset(x_pos+y, y_pos+x, cl);
-        lcd_pset(x_pos-y, y_pos+x, cl);
-        lcd_pset(x_pos+y, y_pos-x, cl);
-        lcd_pset(x_pos-y, y_pos-x, cl);
+        lcd_pset(x_pos+x, y_pos+y, cl, graphic);
+        lcd_pset(x_pos-x, y_pos+y, cl, graphic);
+        lcd_pset(x_pos+x, y_pos-y, cl, graphic);
+        lcd_pset(x_pos-x, y_pos-y, cl, graphic);
+        lcd_pset(x_pos+y, y_pos+x, cl, graphic);
+        lcd_pset(x_pos-y, y_pos+x, cl, graphic);
+        lcd_pset(x_pos+y, y_pos-x, cl, graphic);
+        lcd_pset(x_pos-y, y_pos-x, cl, graphic);
         if(fill){
             lcd_line(x_pos-x, y_pos+y, x_pos+x, y_pos+y, cl);
             lcd_line(x_pos-x, y_pos-y, x_pos+x, y_pos-y, cl);
@@ -277,7 +284,7 @@ void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
         for(dot_pos=0; dot_pos<8; dot_pos++) { // フォントデータを列の上から1ビットずつ描画
             dot_cl = (font[font_code][font_data_col] & dot_extract) ? 1 : 0; // フォントデータ抽出
             if(!cl) dot_cl = !dot_cl; // 白色なら反転
-            lcd_pset(x_pos, y_pos+dot_pos, dot_cl);
+            lcd_pset(x_pos, y_pos+dot_pos, dot_cl, text);
             dot_extract <<= 1; // フォントデータの抽出を次のビットに移行
         }
         x_pos++;
@@ -309,12 +316,26 @@ void lcd_print_c_auto(uint8_t c_code, color cl){
 
         x_cursor = 0;
         y_cursor++;
+        count_candel = 0;
 
     } else if(c_code == '\n') {
 
         if(c_code_prev != '\r'){ // \r\nで2回改行しないように処理
             x_cursor = 0;
             y_cursor++;
+            count_candel = 0;
+        }
+
+    } else if(c_code == 0x08) {
+
+        if(count_candel > 0) {
+            count_candel--;
+            if(x_cursor == 0) {
+                x_cursor = 20;
+                y_cursor--;
+            } else {
+                x_cursor--;
+            }
         }
 
     } else {
@@ -327,10 +348,13 @@ void lcd_print_c_auto(uint8_t c_code, color cl){
             x_cursor = 0;
             y_cursor = 5;
         }
-        if(x_cursor > 20) x_cursor = 0;
         lcd_print_c_section(x_cursor, y_cursor, c_code, cl);
         x_cursor++;
-        if(x_cursor > 20) y_cursor++;
+        if(x_cursor > 20) {
+            x_cursor = 0;
+            y_cursor++;
+        }
+        count_candel++;
     }
 
     c_code_prev = c_code;
@@ -368,7 +392,7 @@ void lcd_disp_bmp(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool 
 
     for(int i=0; i<bmp_info.image_height; i++){
         for(int j=0; j<bmp_info.image_width; j++){
-            lcd_pset(x_pos+j, y_pos+i, bmp_buf[i][j]);
+            lcd_pset(x_pos+j, y_pos+i, bmp_buf[i][j], graphic);
         }
     }
 
@@ -382,21 +406,30 @@ void lcd_disp_nbi(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool 
 
     for(int i=0; i<nbi_info.image_height; i++){
         for(int j=0; j<nbi_info.image_width; j++){
-            lcd_pset(x_pos+j, y_pos+i, nbi_buf[i][j]);
+            lcd_pset(x_pos+j, y_pos+i, nbi_buf[i][j], graphic);
         }
     }
 
 }
 
-void lcd_play_nbm(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool trans, unsigned int from, unsigned int to){
+int lcd_play_nbm(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool trans, unsigned int from, unsigned int to){
 
     sd_card_t *pSD;
     FRESULT fr;
     FIL fil;
     bool nbm_buf[48][128];
     struct sd_nbm_info nbm_info = {0, 0};
+    int result;
 
-    sd_open_nbm(pSD, &fr, &fil, &nbm_info, file_name);
+    result = sd_open_nbm(&pSD, &fr, &fil, &nbm_info, file_name);
+    switch(result) {
+        case SD_ERR_SDMOUNT:
+            return LCD_ERR_SDMOUNT;
+        case SD_ERR_CHDRIVE:
+            return LCD_ERR_CHDRIVE;
+        case SD_ERR_FNFOUND:
+            return LCD_ERR_FNFOUND;
+    }
 
     unsigned long start_frame = lcd_get_current_frame();
 
@@ -411,14 +444,15 @@ void lcd_play_nbm(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool 
         sd_disp_nbm(&fil, nbm_buf, &nbm_info, i);
         for(int j=0; j<nbm_info.image_height; j++){
             for(int k=0; k<nbm_info.image_width; k++){
-                lcd_pset(x_pos+k, y_pos+j, nbm_buf[j][k]);
+                lcd_pset(x_pos+k, y_pos+j, nbm_buf[j][k], graphic);
             }
         }
         lcd_vsync();
     }
 
-    sd_close_nbm(pSD, &fr, &fil, &nbm_info, file_name);
-
+    sd_close_nbm(&pSD, &fr, &fil, &nbm_info, file_name);
+    
+    return LCD_ERR_OK;
 }
 
 void lcd_scroll(scroll_dir dir){

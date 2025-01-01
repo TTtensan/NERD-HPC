@@ -12,6 +12,7 @@
 #include "rtc.h"
 #include "diskio.h"
 #include "lcd.h"
+#include "pin.h"
 
 static std::vector<spi_t *> spis;
 static std::vector<sd_card_t *> sd_cards;
@@ -190,18 +191,36 @@ void sd_read_nbi(bool nbi_buf[48][128], struct sd_nbi_info* nbi_info, char* file
 
 }
 
-void sd_open_nbm(sd_card_t *pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_info, char* file_name){
+int sd_open_nbm(sd_card_t **pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_info, char* file_name){
 
-    pSD = sd_get_by_num(0);
+    *pSD = sd_get_by_num(0);
 
-    *fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
-    if (FR_OK != *fr) panic("f_mount error: %s (%d)\n", FRESULT_str(*fr), *fr);
-    *fr = f_chdrive(pSD->pcName);
-    if (FR_OK != *fr) panic("f_chdrive error: %s (%d)\n", FRESULT_str(*fr), *fr);
+    *fr = f_mount(&(*pSD)->fatfs, (*pSD)->pcName, 1);
+    if (FR_OK != *fr) return SD_ERR_SDMOUNT;
+    *fr = f_chdrive((*pSD)->pcName);
+    if (FR_OK != *fr) {
+        *fr = f_unmount((*pSD)->pcName);
+        if (FR_OK == *fr) {
+            (*pSD)->mounted = false;
+        } else {
+            printf("f_unmount error: %s (%d)\n", FRESULT_str(*fr), *fr);
+        }
+        (*pSD)->m_Status |= STA_NOINIT; // in case medium is removed
+        sd_card_detect(*pSD);
+        return SD_ERR_CHDRIVE;
+    }
 
     *fr = f_open(fil, file_name, FA_OPEN_EXISTING | FA_READ);
-    if (FR_OK != *fr && FR_EXIST != *fr){
-        panic("f_open(%s) error: %s (%d)\n", file_name, FRESULT_str(*fr), *fr);
+    if (FR_OK != *fr && FR_EXIST != *fr) {
+        *fr = f_unmount((*pSD)->pcName);
+        if (FR_OK == *fr) {
+            (*pSD)->mounted = false;
+        } else {
+            printf("f_unmount error: %s (%d)\n", FRESULT_str(*fr), *fr);
+        }
+        (*pSD)->m_Status |= STA_NOINIT; // in case medium is removed
+        sd_card_detect(*pSD);
+        return SD_ERR_FNFOUND;
     }
 
     UINT read_buf_size = 2;
@@ -215,18 +234,25 @@ void sd_open_nbm(sd_card_t *pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_
 
     // 画像高さ取得
     nbm_info->image_height = data[1];
-    
+
+    return SD_ERR_OK;
 }
 
-void sd_close_nbm(sd_card_t *pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_info, char* file_name){
+void sd_close_nbm(sd_card_t **pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_info, char* file_name){
 
     *fr = f_close(fil);
     if (FR_OK != *fr) {
         printf("f_close error: %s (%d)\n", FRESULT_str(*fr), *fr);
     }
     
-    f_unmount(pSD->pcName);
-
+    *fr = f_unmount((*pSD)->pcName);
+    if (FR_OK == *fr) {
+        (*pSD)->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(*fr), *fr);
+    }
+    (*pSD)->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(*pSD);
 }
 
 void sd_disp_nbm(FIL* fil, bool nbm_buf[48][128], struct sd_nbm_info* nbm_info, unsigned int page){
@@ -267,11 +293,11 @@ void sd_init(){
     p_spi = new spi_t;
     memset(p_spi, 0, sizeof(spi_t));
     if (!p_spi) panic("Out of memory");
-    p_spi->hw_inst = spi1;  // SPI component
-    p_spi->miso_gpio = 12;  // GPIO number (not pin number)
-    p_spi->mosi_gpio = 11;
-    p_spi->sck_gpio = 10;
-    p_spi->baud_rate = 5000 * 1000; 
+    p_spi->hw_inst = spi0;  // SPI component
+    p_spi->miso_gpio = PIN_SD_DAT0;  // GPIO number (not pin number)
+    p_spi->mosi_gpio = PIN_SD_CMD;
+    p_spi->sck_gpio = PIN_SD_CLK;
+    p_spi->baud_rate = 4500 * 1000; 
     add_spi(p_spi);
 
     // Hardware Configuration of the SD Card "object"
@@ -280,17 +306,12 @@ void sd_init(){
     memset(p_sd_card, 0, sizeof(sd_card_t));
     p_sd_card->pcName = "0:";  // Name used to mount device
     p_sd_card->spi = p_spi;    // Pointer to the SPI driving this card
-    p_sd_card->ss_gpio = 13;   // The SPI slave select GPIO for this SD card
+    p_sd_card->ss_gpio = PIN_SD_DAT3;   // The SPI slave select GPIO for this SD card
     p_sd_card->use_card_detect = false;
-    p_sd_card->card_detect_gpio = 14;  // Card detect
+    p_sd_card->card_detect_gpio = 13;  // Card detect
     // What the GPIO read returns when a card is
     // present. Use -1 if there is no card detect.
     p_sd_card->card_detected_true = -1;
     add_sd_card(p_sd_card);
-
-    for (size_t i = 0; i < sd_get_num(); ++i) {
-        sd_test(sd_get_by_num(i));
-    }
-    printf("write hello world to sd card\n");
 
 }

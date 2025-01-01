@@ -10,7 +10,7 @@ void draw_place_dot_order(uint8_t row_start, uint8_t row_end, color cl){
         for(int j=0; j<=127; j++){
             printf("x_pos: %d, y_pos: %d\n", j, i);
             sleep_ms(10);
-            lcd_pset(j, i, cl);
+            lcd_pset(j, i, cl, graphic);
         }
     }
 
@@ -19,7 +19,7 @@ void draw_place_dot_order(uint8_t row_start, uint8_t row_end, color cl){
 void draw_place_dot_random(color cl){
 
     sleep_ms(1);
-    lcd_pset(rand()%128, rand()%48, cl);
+    lcd_pset(rand()%128, rand()%48, cl, graphic);
 
 }
 
@@ -57,17 +57,17 @@ void draw_test(){
     //}
     //sleep_ms(5000);
     //lcd_disp_nbi(0, 0, "1.nbi", black, false);
-    //lcd_play_nbm(0, 0, "badapple3.nbm", black, false, 0, 13113);
-    while(1){
-        sleep_ms(100);
-        lcd_print_c_auto('1', black);
-        sleep_ms(100);
-        lcd_print_c_auto('2', black);
-        sleep_ms(100);
-        lcd_print_c_auto('3', black);
-        sleep_ms(100);
-        lcd_print_c_auto('\n', black);
-    }
+    lcd_play_nbm(0, 0, "badapple3.nbm", black, false, 0, 13113);
+    //while(1){
+    //    sleep_ms(100);
+    //    lcd_print_c_auto('1', black);
+    //    sleep_ms(100);
+    //    lcd_print_c_auto('2', black);
+    //    sleep_ms(100);
+    //    lcd_print_c_auto('3', black);
+    //    sleep_ms(100);
+    //    lcd_print_c_auto('\n', black);
+    //}
     while(true);
     //lcd_scroll(down);
     //lcd_cls(white);

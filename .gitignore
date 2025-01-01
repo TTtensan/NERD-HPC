@@ -9,4 +9,4 @@ hardware/*/*.lck
 software/_build/*
 !software/_build/src
 software/_build/src/*
-!nerd_boy.uf2
+!NERD_HPC.uf2

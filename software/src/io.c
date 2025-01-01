@@ -5,6 +5,7 @@
 #include "io.h"
 
 static char event_str[128];
+uint8_t buf_i2c[2];
 
 void io_button_callback(uint gpio, uint32_t events){
     gpio_event_string(event_str, events);

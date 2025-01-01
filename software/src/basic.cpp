@@ -8,7 +8,17 @@
 #include <stdio.h>
 #include "tusb.h"
 #include "lcd.h"
+#include "f_util.h"
+#include "ff.h"
+#include "diskio.h"
+#include "sd.hpp"
+#include "ioexp.h"
 #include "basic.hpp"
+
+#define _SLEEP_
+#define _PROG_
+#define _LCD_
+#define _IOEXP_
 
 // TOYOSHIKI TinyBASIC symbols
 // TO-DO Rewrite defined values to fit your machine as needed
@@ -21,16 +31,29 @@
 
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
-#define STR_EDITION "NERD BOY"
+#define STR_EDITION "NERD HPC"
+#define STR_VERSION "1.0.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
-#define c_getch( ) getchar()
-#define c_kbhit( ) tud_cdc_available()
+#define c_getch( ) getch2()
+#define c_kbhit( ) kbhit2()
 
 void putch2(char c) {
     printf("%c", c);
     lcd_print_c_auto(c, black);
+}
+
+char getch2() {
+    while(true) {
+        if(ioexp_getchr_available()) return ioexp_getchr();
+        else if(tud_cdc_available()) return getchar();
+    }
+}
+
+uint32_t kbhit2() {
+    if(ioexp_getchr_available() || tud_cdc_available()) return 1;
+    else return 0;
 }
 
 #define KEY_ENTER 13
@@ -57,6 +80,23 @@ const char *kwtbl[] = {
   "-", "+", "*", "/", "(", ")",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
+#ifdef _SLEEP_
+  "SLEEPMS",
+  "SLEEPUS",
+#endif
+#ifdef _PROG_
+  "SAVE", "LOAD",
+#endif
+#ifdef _LCD_
+  "CLS",
+  "GCLS",
+  "VSYNC",
+  "GPSET",
+  "GPLAYNM",
+#endif
+#ifdef _IOEXP_
+  "GETKEY",
+#endif
   "LIST", "RUN", "NEW"
 };
 
@@ -73,6 +113,23 @@ enum {
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
+#ifdef _SLEEP_
+  I_SLEEPMS,
+  I_SLEEPUS,
+#endif
+#ifdef _PROG_
+  I_SAVE, I_LOAD,
+#endif
+#ifdef _LCD_
+  I_CLS,
+  I_GCLS,
+  I_VSYNC,
+  I_GPSET,
+  I_GPLAYNM,
+#endif
+#ifdef _IOEXP_
+  I_GETKEY,
+#endif
   I_LIST, I_RUN, I_NEW,
   I_NUM, I_VAR, I_STR,
   I_EOL
@@ -84,6 +141,11 @@ const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
+#ifdef _LCD_
+  I_CLS,
+  I_GCLS,
+  I_VSYNC,
+#endif
   I_ARRAY, I_RND, I_ABS, I_SIZE
 };
 
@@ -132,6 +194,18 @@ const char* errmsg[] = {
   "Illegal command",
   "Syntax error",
   "Internal error",
+#ifdef _PROG_
+  "SD card mount error",
+  "Change drive error",
+  "File already exist",
+  "File can not open",
+  "File not found",
+#endif
+#ifdef _LCD_
+  "SD card mount error",
+  "Change drive error",
+  "File not found",
+#endif
   "Abort by [ESC]"
 };
 
@@ -151,6 +225,18 @@ enum {
   ERR_COM,
   ERR_SYNTAX,
   ERR_SYS,
+#ifdef _PROG_
+  ERR_SDMOUNT,
+  ERR_SDCHDRV,
+  ERR_FEXIST,
+  ERR_FNOPEN,
+  ERR_FNFOUND,
+#endif
+#ifdef _LCD_
+  ERR_NMSDMOUNT,
+  ERR_NMSDCHDRV,
+  ERR_NMFNFOUND,
+#endif
   ERR_ESC
 };
 
@@ -603,6 +689,16 @@ short getparam() {
   return value; //値を持ち帰る
 }
 
+#ifdef _IOEXP_
+
+short igetkey(short index) {
+
+    short keycode = ioexp_getkey(index);
+    return keycode;
+}
+#endif
+
+
 // Get value
 short ivalue() {
   short value; //値
@@ -651,6 +747,20 @@ short ivalue() {
     }
     value = arr[value]; //配列の値を取得
     break; //ここで打ち切る
+
+#ifdef _IOEXP_
+  case I_GETKEY: //関数GETKEYの場合
+    cip++;
+    value = getparam();
+    if (err) //もしエラーが生じたら
+      break; //ここで打ち切る
+    if(value < 0 || 7 < value) {
+        err = ERR_SYNTAX;
+        break;
+    }
+    value = igetkey(value);
+    break;
+#endif
 
   //関数の値の取得
   case I_RND: //関数RNDの場合
@@ -982,6 +1092,112 @@ void ilet() {
   }
 }
 
+#ifdef _SLEEP_
+void isleepms() {
+
+    short ms;
+    ms = iexp();
+
+    if(err) return;
+
+    if(ms < 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    sleep_ms(ms);
+}
+
+void isleepus() {
+
+    short us;
+    us = iexp();
+
+    if(err) return;
+
+    if(us < 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    sleep_us(us);
+}
+#endif
+
+#ifdef _LCD_
+void icls() {
+
+    lcd_cls(white, text);
+}
+
+void igcls() {
+
+    lcd_cls(white, graphic);
+}
+
+void ivsync() {
+
+    lcd_vsync();
+}
+
+void igpset() {
+
+    short x_pos, y_pos, color; //値
+    x_pos = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    if(color) lcd_pset(x_pos, y_pos, black, graphic);
+    else lcd_pset(x_pos, y_pos, white, graphic);
+}
+
+void igplaynm() {
+
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    if (*cip != I_STR) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    len = *cip;
+    if (len == 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    for (i = 0; i < len; i++) buf[i] = *cip++;
+    buf[i] = 0;
+
+    if (*cip != I_EOL) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    int result = lcd_play_nbm(0, 0, buf, black, false, 0, 13113);
+    switch(result) {
+        case LCD_ERR_SDMOUNT:
+            err = ERR_NMSDMOUNT;
+            return;
+        case LCD_ERR_CHDRIVE:
+            err = ERR_NMSDCHDRV;
+            return;
+        case LCD_ERR_FNFOUND:
+            err = ERR_NMFNFOUND;
+            return;
+    }
+}
+#endif
+
 // Execute a series of i-code
 unsigned char* iexe() {
   short lineno; //行番号
@@ -1175,7 +1391,42 @@ unsigned char* iexe() {
       cip++; //中間コードポインタを次へ進める
       iinput(); //INPUT文を実行
       break; //打ち切る
-
+#ifdef _SLEEP_
+    case I_SLEEPMS:
+        cip++;
+        isleepms();
+        break;
+    case I_SLEEPUS:
+        cip++;
+        isleepus();
+        break;
+#endif
+#ifdef _PROG_
+    case I_SAVE: //中間コードがSAVEの場合
+    case I_LOAD: //中間コードがLOADの場合
+#endif
+#ifdef _LCD_
+    case I_CLS: //中間コードがCLSの場合
+      cip++;
+      icls();
+      break;
+    case I_GCLS: //中間コードがGCLSの場合
+      cip++;
+      igcls();
+      break;
+    case I_VSYNC: //中間コードがVSYNCの場合
+      cip++;
+      ivsync();
+      break;
+    case I_GPSET: //中間コードがGPSETの場合
+      cip++;
+      igpset();
+      break;
+    case I_GPLAYNM: //中間コードがGPLAYNMの場合
+      cip++;
+      igplaynm();
+      break;
+#endif
     case I_NEW: //中間コードがNEWの場合
     case I_LIST: //中間コードがLISTの場合
     case I_RUN: //中間コードがRUNの場合
@@ -1258,6 +1509,221 @@ void inew(void) {
   clp = listbuf; //行ポインタをプログラム保存領域の先頭に設定
 }
 
+
+#ifdef _PROG_
+//Listing 1 line of i-code to file
+void fputlist(FIL *fp, unsigned char* ip) {
+    unsigned char i;
+
+    while (*ip != I_EOL) {
+        // Case keyword
+        if (*ip < SIZE_KWTBL) {
+            f_puts(kwtbl[*ip], fp);
+            if (!nospacea(*ip)) f_putc(' ', fp);
+            if (*ip == I_REM) {
+                ip++;
+                i = *ip++;
+                while (i--) {
+                    f_putc(*ip++, fp);
+                }
+                return;
+            }
+            ip++;
+        }
+        else
+
+            // Case numeric
+            if (*ip == I_NUM) {
+                ip++;
+                f_printf(fp, "%d", *ip | *(ip + 1) << 8);
+                ip += 2;
+                if (!nospaceb(*ip)) f_putc(' ', fp);
+            }
+            else
+
+                // Case variable
+                if (*ip == I_VAR) {
+                    ip++;
+                    f_putc(*ip++ + 'A', fp);
+                    if (!nospaceb(*ip)) f_putc(' ', fp);
+                }
+                else
+
+                    // Case string
+                    if (*ip == I_STR) {
+                        char c;
+
+                        c = '\"';
+                        ip++;
+                        for (i = *ip; i; i--) {
+                            if (*(ip + i) == '\"') {
+                                c = '\'';
+                                break;
+                            }
+                        }
+
+                        f_putc(c, fp);
+                        i = *ip++;
+                        while (i--) f_putc(*ip++, fp);
+                        f_putc(c, fp);
+                        if (*ip == I_VAR) f_putc(' ', fp);
+                    }
+
+        // Nothing match, I think, such case is impossible
+                    else {
+                        err = ERR_SYS;
+                        return;
+                    }
+    }
+}
+
+//SAVE command handler
+void isave() {
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        err = ERR_SDMOUNT;
+        return;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        err = ERR_SDCHDRV;
+        return;
+    }
+
+    if (*cip != I_STR) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    len = *cip;
+    if (len == 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    for (i = 0; i < len; i++) buf[i] = *cip++;
+    buf[i] = 0;
+
+    if (*cip != I_EOL) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+// ファイルが既に存在している場合の処理
+//    f_open(&fp, buf, FA_CREATE_NEW | FA_READ); // Windows style
+//                            //fp = fopen(buf, "r"); // Linux style
+//    if (&fp != NULL) {
+//        f_close(&fp);
+//        err = ERR_FEXIST;
+//        return;
+//    }
+
+    fr = f_open(&fp, buf, FA_OPEN_ALWAYS | FA_WRITE);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        err = ERR_FNOPEN;
+        return;
+    }
+
+    clp = listbuf;
+    while (*clp) {
+        f_printf(&fp, "%d ", getlineno(clp));
+        fputlist(&fp, clp + 3);
+        if (err) break;
+        f_printf(&fp, "\n");
+        clp += *clp;
+    }
+    f_close(&fp);
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+}
+
+//LOAD command handler
+void iload() {
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        err = ERR_SDMOUNT;
+        return;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        err = ERR_SDCHDRV;
+        return;
+    }
+
+    if (*cip != I_STR) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    len = *cip;
+    if (len == 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    for (i = 0; i < len; i++) buf[i] = *cip++;
+    buf[i] = 0;
+
+    if (*cip != I_EOL) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    fr = f_open(&fp, buf, FA_OPEN_EXISTING | FA_READ);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        err = ERR_FNFOUND;
+        return;
+    }
+
+    inew();
+
+    while (f_gets(buf, SIZE_LINE, &fp)) {
+        for (i = 0; c_isprint(buf[i]); i++) lbuf[i] = buf[i];
+        lbuf[i] = 0;
+        len = toktoi();
+        if (err) break;
+        if (*ibuf != I_NUM) {
+            err = ERR_SYNTAX;
+            break;
+        }
+        *ibuf = len;
+        inslist();
+        if (err) break;
+    }
+    f_close(&fp);
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+}
+#endif
+
 //Command precessor
 void icom() {
   cip = ibuf; //中間コードポインタを中間コードバッファの先頭に設定
@@ -1285,6 +1751,17 @@ void icom() {
     cip++; //中間コードポインタを次へ進める
     irun(); //RUN命令を実行
     break; //打ち切る
+
+#ifdef _PROG_
+  case I_SAVE:
+    cip++;
+    isave();
+    break;
+  case I_LOAD:
+    cip++;
+    iload();
+    break;
+#endif
 
   default: //どれにも該当しない場合
     iexe(); //中間コードを実行
@@ -1334,6 +1811,9 @@ void basic() {
   newline(); //改行
   c_puts(STR_EDITION); //版を区別する文字列を表示
   c_puts(" EDITION"); //「 EDITION」を表示
+  newline(); //改行
+  c_puts("version ");
+  c_puts(STR_VERSION);
   newline(); //改行
   error(); //「OK」またはエラーメッセージを表示してエラー番号をクリア
 

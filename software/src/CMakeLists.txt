@@ -1,4 +1,4 @@
-set(TARGET_NAME NERD_BOY)
+set(TARGET_NAME NERD_HPC)
 add_executable(${TARGET_NAME}
         main.c
         pin.c
@@ -9,14 +9,19 @@ add_executable(${TARGET_NAME}
         draw.c
         font.c
         io.c
+        ioexp.c
+        ir.c
+        mcore.c
         basic.cpp
         )
 
 # pull in common dependencies
 target_link_libraries(${TARGET_NAME}
     pico_stdlib
+    pico_multicore
     hardware_pwm
     hardware_spi
+    hardware_i2c
     FatFs_SPI
     )
 
