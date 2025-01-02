@@ -32,7 +32,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.0.1"
+#define STR_VERSION "1.1.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -92,6 +92,8 @@ const char *kwtbl[] = {
   "GCLS",
   "VSYNC",
   "GPSET",
+  "GLINE",
+  "GCIRCLE",
   "GPLAYNM",
 #endif
 #ifdef _IOEXP_
@@ -125,6 +127,8 @@ enum {
   I_GCLS,
   I_VSYNC,
   I_GPSET,
+  I_GLINE,
+  I_GCIRCLE,
   I_GPLAYNM,
 #endif
 #ifdef _IOEXP_
@@ -1154,8 +1158,53 @@ void igpset() {
     cip++;
     color = iexp();
     if(err) return;
+
     if(color) lcd_pset(x_pos, y_pos, black, graphic);
     else lcd_pset(x_pos, y_pos, white, graphic);
+}
+
+void igline() {
+
+    short x_pos0, y_pos0, x_pos1, y_pos1, color;
+    x_pos0 = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos0 = iexp();
+    if(err) return;
+    cip++;
+    x_pos1 = iexp();
+    if(err) return;
+    cip++;
+    y_pos1 = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+
+    if(color) lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, black);
+    else lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, white);
+}
+
+void igcircle() {
+
+    short x_pos, y_pos, radius, color, fill;
+    x_pos = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos = iexp();
+    if(err) return;
+    cip++;
+    radius = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    cip++;
+    fill = iexp();
+    if(err) return;
+
+    if(color) lcd_circle(x_pos, y_pos, radius, black, fill);
+    else lcd_circle(x_pos, y_pos, radius, white, fill);
 }
 
 void igplaynm() {
@@ -1424,6 +1473,14 @@ unsigned char* iexe() {
     case I_GPSET: //中間コードがGPSETの場合
       cip++;
       igpset();
+      break;
+    case I_GLINE: //中間コードがGLINEの場合
+      cip++;
+      igline();
+      break;
+    case I_GCIRCLE: //中間コードがGCIRCLEの場合
+      cip++;
+      igcircle();
       break;
     case I_GPLAYNM: //中間コードがGPLAYNMの場合
       cip++;
