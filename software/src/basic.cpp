@@ -163,6 +163,9 @@ const unsigned char i_nsa[] = {
 #ifdef _IOEXP_
   I_GETKEY,
 #endif
+#ifdef _SPEAKER_
+  I_STPSND,
+#endif
   I_ARRAY, I_RND, I_ABS, I_SIZE
 };
 
