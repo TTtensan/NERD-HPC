@@ -13,12 +13,14 @@
 #include "diskio.h"
 #include "sd.hpp"
 #include "ioexp.h"
+#include "speaker.h"
 #include "basic.hpp"
 
 #define _SLEEP_
 #define _PROG_
 #define _LCD_
 #define _IOEXP_
+#define _SPEAKER_
 
 // TOYOSHIKI TinyBASIC symbols
 // TO-DO Rewrite defined values to fit your machine as needed
@@ -32,7 +34,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.1.0"
+#define STR_VERSION "1.2.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -99,6 +101,10 @@ const char *kwtbl[] = {
 #ifdef _IOEXP_
   "GETKEY",
 #endif
+#ifdef _SPEAKER_
+  "PLYSND",
+  "STPSND",
+#endif
   "LIST", "RUN", "NEW"
 };
 
@@ -133,6 +139,10 @@ enum {
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
+#endif
+#ifdef _SPEAKER_
+  I_PLYSND,
+  I_STPSND,
 #endif
   I_LIST, I_RUN, I_NEW,
   I_NUM, I_VAR, I_STR,
@@ -1250,6 +1260,25 @@ void igplaynm() {
 }
 #endif
 
+#ifdef _SPEAKER_
+void iplysnd() {
+
+    short freq, duration_ms; //値
+    freq = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    duration_ms = iexp();
+    if(err) return;
+
+    play_sound(freq, duration_ms);
+}
+
+void istpsnd() {
+
+    stop_sound();
+}
+#endif
+
 // Execute a series of i-code
 unsigned char* iexe() {
   short lineno; //行番号
@@ -1485,6 +1514,16 @@ unsigned char* iexe() {
     case I_GPLAYNM: //中間コードがGPLAYNMの場合
       cip++;
       igplaynm();
+      break;
+#endif
+#ifdef _SPEAKER_
+    case I_PLYSND: //中間コードがPLYSNDの場合
+      cip++;
+      iplysnd();
+      break;
+    case I_STPSND: //中間コードがSTPSNDの場合
+      cip++;
+      istpsnd();
       break;
 #endif
     case I_NEW: //中間コードがNEWの場合

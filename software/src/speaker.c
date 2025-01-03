@@ -27,9 +27,15 @@ void play_sound(uint freq, uint duration_ms){
     uint16_t top_value = calc_top_value(freq);
     pwm_set_wrap(slice_num, top_value);
     pwm_set_chan_level(slice_num, PWM_CHAN_B, top_value/2);
-    sleep_ms(duration_ms);
-    pwm_set_chan_level(slice_num, PWM_CHAN_B, 0);
+    if(duration_ms) {
+        sleep_ms(duration_ms);
+        pwm_set_chan_level(slice_num, PWM_CHAN_B, 0);
+    }
+}
 
+void stop_sound() {
+    uint slice_num = pwm_gpio_to_slice_num(PIN_SPEAKER);
+    pwm_set_chan_level(slice_num, PWM_CHAN_B, 0);
 }
 
 void play_melody() {
