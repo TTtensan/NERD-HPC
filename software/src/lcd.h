@@ -41,6 +41,7 @@ void lcd_disp_vbuf();
 void lcd_slide_vbuf(scroll_dir dir, color cl);
 void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl, screen sc);
 void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl);
+void lcd_rect(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl, bool fill);
 void lcd_circle(uint8_t x_pos, uint8_t y_pos, uint8_t rad, color cl, bool fill);
 void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl);
 void lcd_print_c_section(uint8_t x_sec, uint8_t y_sec, uint8_t c_code, color cl);

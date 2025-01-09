@@ -242,6 +242,26 @@ void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, co
 
 }
 
+void lcd_rect(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl, bool fill){
+
+    if(fill){
+        if(y_pos1 >= y_pos0){
+            for(uint8_t i=y_pos0; i<=y_pos1; i++){
+                lcd_line(x_pos0, i, x_pos1, i, cl);
+            }
+        } else {
+            for(uint8_t i=y_pos1; i<=y_pos0; i++){
+                lcd_line(x_pos0, i, x_pos1, i, cl);
+            }
+        }
+    } else {
+        lcd_line(x_pos0, y_pos0, x_pos1, y_pos0, cl);
+        lcd_line(x_pos0, y_pos0, x_pos0, y_pos1, cl);
+        lcd_line(x_pos1, y_pos0, x_pos1, y_pos1, cl);
+        lcd_line(x_pos0, y_pos1, x_pos1, y_pos1, cl);
+    }
+}
+
 void lcd_circle(uint8_t x_pos, uint8_t y_pos, uint8_t rad, color cl, bool fill){
 
     int x = rad;

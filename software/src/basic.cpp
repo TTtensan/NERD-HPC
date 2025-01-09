@@ -34,7 +34,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.2.0"
+#define STR_VERSION "1.3.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -95,6 +95,7 @@ const char *kwtbl[] = {
   "VSYNC",
   "GPSET",
   "GLINE",
+  "GRECT",
   "GCIRCLE",
   "GPLAYNM",
 #endif
@@ -134,6 +135,7 @@ enum {
   I_VSYNC,
   I_GPSET,
   I_GLINE,
+  I_GRECT,
   I_GCIRCLE,
   I_GPLAYNM,
 #endif
@@ -1198,6 +1200,31 @@ void igline() {
     else lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, white);
 }
 
+void igrect() {
+
+    short x_pos0, y_pos0, x_pos1, y_pos1, color, fill;
+    x_pos0 = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos0 = iexp();
+    if(err) return;
+    cip++;
+    x_pos1 = iexp();
+    if(err) return;
+    cip++;
+    y_pos1 = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    cip++;
+    fill = iexp();
+    if(err) return;
+
+    if(color) lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, black, fill);
+    else lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, white, fill);
+}
+
 void igcircle() {
 
     short x_pos, y_pos, radius, color, fill;
@@ -1509,6 +1536,10 @@ unsigned char* iexe() {
     case I_GLINE: //中間コードがGLINEの場合
       cip++;
       igline();
+      break;
+    case I_GRECT: //中間コードがGRECTの場合
+      cip++;
+      igrect();
       break;
     case I_GCIRCLE: //中間コードがGCIRCLEの場合
       cip++;
