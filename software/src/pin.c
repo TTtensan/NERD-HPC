@@ -38,13 +38,13 @@ void pin_init(){
     gpio_set_dir(PIN_GEN_IO_2, GPIO_OUT);
     gpio_put(PIN_GEN_IO_2, 0);
 
-    gpio_init(PIN_GEN_IO_ADC1);
-    gpio_set_dir(PIN_GEN_IO_ADC1, GPIO_OUT);
-    gpio_put(PIN_GEN_IO_ADC1, 0);
+    gpio_init(PIN_GEN_IO_3);
+    gpio_set_dir(PIN_GEN_IO_3, GPIO_OUT);
+    gpio_put(PIN_GEN_IO_3, 0);
 
-    gpio_init(PIN_GEN_IO_ADC2);
-    gpio_set_dir(PIN_GEN_IO_ADC2, GPIO_OUT);
-    gpio_put(PIN_GEN_IO_ADC2, 0);
+    gpio_init(PIN_GEN_IO_4);
+    gpio_set_dir(PIN_GEN_IO_4, GPIO_OUT);
+    gpio_put(PIN_GEN_IO_4, 0);
 
     // LCD
     spi_init(spi1, 8000000);

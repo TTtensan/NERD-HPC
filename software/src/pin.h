@@ -30,8 +30,8 @@
 
 #define PIN_GEN_IO_1 25
 #define PIN_GEN_IO_2 26
-#define PIN_GEN_IO_ADC1 27
-#define PIN_GEN_IO_ADC2 28
+#define PIN_GEN_IO_3 27
+#define PIN_GEN_IO_4 28
 
 void pin_init();
 

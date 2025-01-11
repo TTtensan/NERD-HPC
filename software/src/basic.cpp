@@ -12,6 +12,7 @@
 #include "ff.h"
 #include "diskio.h"
 #include "sd.hpp"
+#include "io.h"
 #include "ioexp.h"
 #include "speaker.h"
 #include "basic.hpp"
@@ -19,6 +20,7 @@
 #define _SLEEP_
 #define _PROG_
 #define _LCD_
+#define _IO_
 #define _IOEXP_
 #define _SPEAKER_
 
@@ -34,7 +36,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.3.0"
+#define STR_VERSION "1.4.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -99,6 +101,14 @@ const char *kwtbl[] = {
   "GCIRCLE",
   "GPLAYNM",
 #endif
+#ifdef _IO_
+  "IOSD",
+  "IOPUT",
+  "IOGET",
+  "IOPU",
+  "IOPD",
+  "IODP",
+#endif
 #ifdef _IOEXP_
   "GETKEY",
 #endif
@@ -139,6 +149,14 @@ enum {
   I_GCIRCLE,
   I_GPLAYNM,
 #endif
+#ifdef _IO_
+  I_IOSD,
+  I_IOPUT,
+  I_IOGET,
+  I_IOPU,
+  I_IOPD,
+  I_IODP,
+#endif
 #ifdef _IOEXP_
   I_GETKEY,
 #endif
@@ -161,6 +179,9 @@ const unsigned char i_nsa[] = {
   I_CLS,
   I_GCLS,
   I_VSYNC,
+#endif
+#ifdef _IO_
+  I_IOGET,
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
@@ -711,6 +732,14 @@ short getparam() {
   return value; //値を持ち帰る
 }
 
+#ifdef _IO_
+short iioget(short gpio) {
+
+    short status = io_get(gpio);
+    return status;
+}
+#endif
+
 #ifdef _IOEXP_
 
 short igetkey(short index) {
@@ -769,6 +798,20 @@ short ivalue() {
     }
     value = arr[value]; //配列の値を取得
     break; //ここで打ち切る
+
+#ifdef _IO_
+  case I_IOGET: //関数IOGETの場合
+    cip++;
+    value = getparam();
+    if (err) //もしエラーが生じたら
+      break; //ここで打ち切る
+    if(value < 1 || 4 < value) {
+        err = ERR_SYNTAX;
+        break;
+    }
+    value = iioget(value);
+    break;
+#endif
 
 #ifdef _IOEXP_
   case I_GETKEY: //関数GETKEYの場合
@@ -1290,6 +1333,79 @@ void igplaynm() {
 }
 #endif
 
+#ifdef _IO_
+void iiosd() {
+
+    short gpio,out;
+    gpio = iexp(); //値を取得
+    if(err) return;
+    if(gpio < 1 || 4 < gpio) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+    out = iexp();
+    if(err) return;
+
+    io_set_dir(gpio, !out);
+}
+
+void iiopu() {
+
+    short gpio;
+    gpio = iexp(); //値を取得
+    if(err) return;
+    if(gpio < 1 || 4 < gpio) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    io_pull_up(gpio);
+}
+
+void iiopd() {
+
+    short gpio;
+    gpio = iexp(); //値を取得
+    if(err) return;
+    if(gpio < 1 || 4 < gpio) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    io_pull_down(gpio);
+}
+
+void iiodp() {
+
+    short gpio;
+    gpio = iexp(); //値を取得
+    if(err) return;
+    if(gpio < 1 || 4 < gpio) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    io_disable_pulls(gpio);
+}
+
+void iioput() {
+
+    short gpio, value;
+    gpio = iexp(); //値を取得
+    if(err) return;
+    if(gpio < 1 || 4 < gpio) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+    value = iexp();
+    if(err) return;
+
+    io_put(gpio, value);
+}
+#endif
+
 #ifdef _SPEAKER_
 void iplysnd() {
 
@@ -1548,6 +1664,28 @@ unsigned char* iexe() {
     case I_GPLAYNM: //中間コードがGPLAYNMの場合
       cip++;
       igplaynm();
+      break;
+#endif
+#ifdef _IO_
+    case I_IOSD: //中間コードがIOSDの場合
+      cip++;
+      iiosd();
+      break;
+    case I_IOPUT: //中間コードがIOPUTの場合
+      cip++;
+      iioput();
+      break;
+    case I_IOPU: //中間コードがIOPUの場合
+      cip++;
+      iiopu();
+      break;
+    case I_IOPD: //中間コードがIOPDの場合
+      cip++;
+      iiopd();
+      break;
+    case I_IODP: //中間コードがIODPの場合
+      cip++;
+      iiodp();
       break;
 #endif
 #ifdef _SPEAKER_
