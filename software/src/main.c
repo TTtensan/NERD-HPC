@@ -38,8 +38,9 @@ int main() {
     multicore_launch_core1(core1_entry);
 
     while (true) {
-        tud_task();
-        hid_task();
+        //tud_task();
+        //hid_task();
+    printf("Hello, I'm NERD BOY\n");
         //basic();
         //draw_test();
     }
