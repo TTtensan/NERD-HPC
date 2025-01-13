@@ -127,6 +127,12 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
   }
 }
 
+uint8_t usb_keycode_read()
+{
+    if(board_millis()>5000) return 0;
+    else return HID_KEY_C;
+}
+
 static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
 {
   // skip if hid is not ready yet
@@ -139,7 +145,7 @@ static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
       // use to avoid send multiple consecutive zero report for keyboard
       static bool has_keyboard_key = false;
 
-      if ( true )
+      if ( code )
       {
         uint8_t keycode[6] = { 0 };
         keycode[0] = code;
@@ -168,7 +174,7 @@ void usb_send_keycode_task(void)
   if ( board_millis() - start_ms < interval_ms) return; // not enough time
   start_ms += interval_ms;
 
-  uint32_t const btn = board_button_read();
+  uint8_t const btn = usb_keycode_read();
 
   // Remote wakeup
   if ( tud_suspended() && btn )
@@ -179,7 +185,7 @@ void usb_send_keycode_task(void)
   }else
   {
     // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-    send_hid_keycode_report(REPORT_ID_KEYBOARD, HID_KEY_B);
+    send_hid_keycode_report(REPORT_ID_KEYBOARD, btn);
   }
 }
 
