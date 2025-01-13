@@ -15,11 +15,13 @@
 #include "io.h"
 #include "ioexp.h"
 #include "speaker.h"
+#include "usb.h"
 #include "basic.hpp"
 
 #define _SLEEP_
 #define _PROG_
 #define _LCD_
+#define _USB_
 #define _IO_
 #define _IOEXP_
 #define _SPEAKER_
@@ -101,6 +103,9 @@ const char *kwtbl[] = {
   "GCIRCLE",
   "GPLAYNM",
 #endif
+#ifdef _USB_
+  "SNDKCD",
+#endif
 #ifdef _IO_
   "IOSD",
   "IOPUT",
@@ -148,6 +153,9 @@ enum {
   I_GRECT,
   I_GCIRCLE,
   I_GPLAYNM,
+#endif
+#ifdef _USB_
+  I_SNDKCD,
 #endif
 #ifdef _IO_
   I_IOSD,
@@ -1333,6 +1341,17 @@ void igplaynm() {
 }
 #endif
 
+#ifdef _USB_
+void isndkcd() {
+
+    short keycode;
+    keycode = iexp();
+    if(err) return;
+
+    usb_set_keycode((uint8_t)keycode);
+}
+#endif
+
 #ifdef _IO_
 void iiosd() {
 
@@ -1664,6 +1683,12 @@ unsigned char* iexe() {
     case I_GPLAYNM: //中間コードがGPLAYNMの場合
       cip++;
       igplaynm();
+      break;
+#endif
+#ifdef _USB_
+    case I_SNDKCD: //中間コードがSNDKCDの場合
+      cip++;
+      isndkcd();
       break;
 #endif
 #ifdef _IO_
