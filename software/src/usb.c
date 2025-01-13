@@ -7,7 +7,7 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
-volatile uint8_t current_keycode = 0;
+volatile uint8_t current_keycode[6] = {};
 
 //--------------------------------------------------------------------+
 // Device callbacks
@@ -130,23 +130,38 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
   }
 }
 
-void usb_set_keycode(uint8_t code)
+void usb_set_keycode(uint8_t *code)
 {
-    sem_acquire_blocking(&sem);
-    current_keycode = code;
-    sem_release(&sem);
+    for(int i=0; i<6; i++){
+        sem_acquire_blocking(&sem);
+        current_keycode[i] = code[i];
+        sem_release(&sem);
+    }
 }
 
-uint8_t usb_get_keycode()
+bool usb_exist_keycode()
+{
+    for(int i=0; i<6; i++){
+        sem_acquire_blocking(&sem);
+        if(current_keycode[i] != 0){
+            sem_release(&sem);
+            return true;
+        }
+        sem_release(&sem);
+    }
+    return false;
+}
+
+uint8_t usb_get_keycode(int index)
 {
     uint8_t code = 0;
     sem_acquire_blocking(&sem);
-    code = current_keycode;
+    code = current_keycode[index];
     sem_release(&sem);
     return code;
 }
 
-static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
+static void send_hid_keycode_report(uint8_t report_id, bool exist_keycode)
 {
   // skip if hid is not ready yet
   if ( !tud_hid_ready() ) return;
@@ -158,10 +173,12 @@ static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
       // use to avoid send multiple consecutive zero report for keyboard
       static bool has_keyboard_key = false;
 
-      if ( code )
+      if ( exist_keycode )
       {
         uint8_t keycode[6] = { 0 };
-        keycode[0] = code;
+        for(int i=0; i<6; i++){
+            keycode[i] = usb_get_keycode(i);
+        }
 
         tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
         has_keyboard_key = true;
@@ -187,10 +204,10 @@ void usb_send_keycode_task(void)
   if ( board_millis() - start_ms < interval_ms) return; // not enough time
   start_ms += interval_ms;
 
-  uint8_t const btn = usb_get_keycode();
+  bool flg_exist_keycode = usb_exist_keycode();
 
   // Remote wakeup
-  if ( tud_suspended() && btn )
+  if ( tud_suspended() && flg_exist_keycode )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
@@ -198,7 +215,7 @@ void usb_send_keycode_task(void)
   }else
   {
     // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-    send_hid_keycode_report(REPORT_ID_KEYBOARD, btn);
+    send_hid_keycode_report(REPORT_ID_KEYBOARD, flg_exist_keycode);
   }
 }
 

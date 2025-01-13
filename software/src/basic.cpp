@@ -1344,11 +1344,26 @@ void igplaynm() {
 #ifdef _USB_
 void isndkcd() {
 
-    short keycode;
-    keycode = iexp();
+    uint8_t keycode[6] = {};
+    keycode[0] = (uint8_t)iexp();
+    if(err) return;
+    cip++;
+    keycode[1] = (uint8_t)iexp();
+    if(err) return;
+    cip++;
+    keycode[2] = (uint8_t)iexp();
+    if(err) return;
+    cip++;
+    keycode[3] = (uint8_t)iexp();
+    if(err) return;
+    cip++;
+    keycode[4] = (uint8_t)iexp();
+    if(err) return;
+    cip++;
+    keycode[5] = (uint8_t)iexp();
     if(err) return;
 
-    usb_set_keycode((uint8_t)keycode);
+    usb_set_keycode(keycode);
 }
 #endif
 
