@@ -6,6 +6,8 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+volatile uint8_t current_keycode = 0;
+
 //--------------------------------------------------------------------+
 // Device callbacks
 //--------------------------------------------------------------------+
@@ -127,10 +129,14 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
   }
 }
 
-uint8_t usb_keycode_read()
+void usb_set_keycode(uint8_t code)
 {
-    if(board_millis()>5000) return 0;
-    else return HID_KEY_C;
+    current_keycode = code;
+}
+
+uint8_t usb_get_keycode()
+{
+    return current_keycode;
 }
 
 static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
@@ -174,7 +180,7 @@ void usb_send_keycode_task(void)
   if ( board_millis() - start_ms < interval_ms) return; // not enough time
   start_ms += interval_ms;
 
-  uint8_t const btn = usb_keycode_read();
+  uint8_t const btn = usb_get_keycode();
 
   // Remote wakeup
   if ( tud_suspended() && btn )
