@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "bsp/board.h"
+#include "mcore.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
 
@@ -131,12 +132,18 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
 
 void usb_set_keycode(uint8_t code)
 {
+    sem_acquire_blocking(&sem);
     current_keycode = code;
+    sem_release(&sem);
 }
 
 uint8_t usb_get_keycode()
 {
-    return current_keycode;
+    uint8_t code = 0;
+    sem_acquire_blocking(&sem);
+    code = current_keycode;
+    sem_release(&sem);
+    return code;
 }
 
 static void send_hid_keycode_report(uint8_t report_id, uint8_t code)
