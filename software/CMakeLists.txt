@@ -23,6 +23,7 @@ pico_sdk_init()
 
 add_subdirectory(src)
 add_subdirectory(libraries/no-OS-FatFS-SD-SPI-RPi-Pico/FatFs_SPI build)
+add_subdirectory(${PICO_TINYUSB_PATH}/examples/device tinyusb_device_examples)
 
 add_compile_options(-Wall
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int

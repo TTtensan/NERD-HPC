@@ -11,6 +11,9 @@
 #include "io.h"
 #include "ioexp.h"
 #include "mcore.h"
+#include "tusb.h"
+#include "usb_descriptors.h"
+#include "usb.h"
 #include "basic.hpp"
 
 void core1_entry() {
@@ -19,6 +22,7 @@ void core1_entry() {
 int main() {
 
     stdio_init_all();
+    tusb_init();
 
     printf("Hello, I'm NERD BOY\n");
 
@@ -34,7 +38,9 @@ int main() {
     multicore_launch_core1(core1_entry);
 
     while (true) {
-        basic();
+        tud_task();
+        hid_task();
+        //basic();
         //draw_test();
     }
 

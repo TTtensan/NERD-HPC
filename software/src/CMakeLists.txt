@@ -12,6 +12,8 @@ add_executable(${TARGET_NAME}
         ioexp.c
         ir.c
         mcore.c
+        usb_descriptors.c
+        usb.c
         basic.cpp
         )
 
@@ -23,10 +25,16 @@ target_link_libraries(${TARGET_NAME}
     hardware_spi
     hardware_i2c
     FatFs_SPI
+    tinyusb_device
+    tinyusb_board
     )
+
+# Make sure TinyUSB can find tusb_config.h
+target_include_directories(${TARGET_NAME} PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR})
 
 # create map/bin/hex file etc.
 pico_add_extra_outputs(${TARGET_NAME})
 
-pico_enable_stdio_usb(${TARGET_NAME} 1)
+pico_enable_stdio_usb(${TARGET_NAME} 0)
 pico_enable_stdio_uart(${TARGET_NAME} 0)

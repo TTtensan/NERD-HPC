@@ -51,12 +51,13 @@ void putch2(char c) {
 char getch2() {
     while(true) {
         if(ioexp_getchr_available()) return ioexp_getchr();
-        else if(tud_cdc_available()) return getchar();
+        //else if(tud_cdc_available()) return getchar();
     }
 }
 
 uint32_t kbhit2() {
-    if(ioexp_getchr_available() || tud_cdc_available()) return 1;
+    //if(ioexp_getchr_available() || tud_cdc_available()) return 1;
+    if(ioexp_getchr_available()) return 1;
     else return 0;
 }
 
