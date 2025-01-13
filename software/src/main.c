@@ -17,6 +17,10 @@
 #include "basic.hpp"
 
 void core1_entry() {
+    while(true) {
+        tud_task();
+        usb_send_keycode_task();
+    }
 }
 
 int main() {
@@ -38,12 +42,7 @@ int main() {
     multicore_launch_core1(core1_entry);
 
     while (true) {
-        tud_task();
-        //hid_task();
-        usb_send_keycode_task();
-    //printf("Hello, I'm NERD BOY\n");
-        //basic();
-        //draw_test();
+        basic();
     }
 
 }
