@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+void usb_send_keycode_task(void);
 void hid_task(void);
 
 #ifdef __cplusplus

@@ -39,8 +39,9 @@ int main() {
 
     while (true) {
         tud_task();
-        hid_task();
-    printf("Hello, I'm NERD BOY\n");
+        //hid_task();
+usb_send_keycode_task();
+    //printf("Hello, I'm NERD BOY\n");
         //basic();
         //draw_test();
     }
