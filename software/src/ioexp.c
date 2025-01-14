@@ -24,6 +24,9 @@ volatile bool status_shift = false;
 volatile bool status_caps = true;
 volatile bool status_2ndfn = false;
 
+volatile short g_en_shift = 1;
+volatile short g_en_esc = 1;
+
 uint8_t table_key2code[2][8][8] = { // Shiftを押した状態も考慮
 { // 何も押していない時
     {0x0f, CODE_CTRL, CODE_ALT, 0x20, CODE_UP, CODE_DOWN, CODE_LEFT, CODE_RIGHT}, // L-Shift, L-Ctrl, L-Alt, Space, ↑, ↓, ←, →
@@ -226,6 +229,7 @@ void ioexp_getchrinfo(uint8_t chrinfo[2]) {
                 current_keyinfo_tmp <<= 7-j;
                 if(prev_keyinfo_tmp != current_keyinfo_tmp) {
                     chrinfo[0] = table_key2code[status_shift][j][i]; // 変化があったキーのコードを格納
+                    if(!g_en_esc && chrinfo[0] == 0x1b) chrinfo[0] = 0; // ESCを無効にしていた場合
                     if(prev_keyinfo_tmp > current_keyinfo_tmp) {
                         chrinfo[1] = button_push;
                     } else {
@@ -253,6 +257,7 @@ short ioexp_getkey(short index) {
     short keys[8] = {0x00};
     short index_current = 0;
 
+    bool flg_shift = false;
     for(int i=0; i<8; i++){
 
         uint8_t offbit = ~(0b00000001 << i);
@@ -267,12 +272,22 @@ short ioexp_getkey(short index) {
             prev_keyinfo_tmp <<= 7-j;
             current_keyinfo_tmp <<= 7-j;
             if(prev_keyinfo_tmp != current_keyinfo_tmp) {
-                keys[index_current] = table_key2code[status_shift][j][i]; // 押下したキーのコードを格納
+                // keyscanがストップしているのでフラグが立っていればShiftとEscを拾う
+                if(g_en_shift && table_key2code[status_shift][j][i] == 0x0f) { // Shift
+                    status_shift = true;
+                    flg_shift = true;
+                } else if (g_en_esc && table_key2code[status_shift][j][i] == 0x1b) { // Esc
+                    current_chr = 0x1b;
+                    flg_getchr_available = true;
+                }
+                if(g_en_shift) keys[index_current] = table_key2code[status_shift][j][i]; // 押下したキーのコードを格納
+                else keys[index_current] = table_key2code[0][j][i];
                 index_current++;
                 break; // キーマトリクスの一列につき1つまで入力可
             }
         }
     }
+    if(!flg_shift) status_shift = false;
 
     ioexp_start_keyscan_timer();
 

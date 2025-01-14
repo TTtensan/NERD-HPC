@@ -42,6 +42,8 @@ void ioexp_write_register(uint8_t reg, uint8_t value);
 void ioexp_getchrinfo(uint8_t chrinfo[2]); // キーのコードと押したか離したかの情報を渡す
 short ioexp_getkey(short index); // 現在押下しているキーの配列からindex番目のキー情報を返す
 
+extern volatile short g_en_shift, g_en_esc;
+
 #ifdef __cplusplus
 }
 #endif

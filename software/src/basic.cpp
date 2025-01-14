@@ -115,6 +115,7 @@ const char *kwtbl[] = {
   "IODP",
 #endif
 #ifdef _IOEXP_
+  "GKOPT",
   "GETKEY",
 #endif
 #ifdef _SPEAKER_
@@ -166,6 +167,7 @@ enum {
   I_IODP,
 #endif
 #ifdef _IOEXP_
+  I_GKOPT,
   I_GETKEY,
 #endif
 #ifdef _SPEAKER_
@@ -1440,6 +1442,18 @@ void iioput() {
 }
 #endif
 
+#ifdef _IOEXP_
+
+void igkopt() {
+
+    g_en_shift = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    g_en_esc = iexp();
+    if(err) return;
+}
+#endif
+
 #ifdef _SPEAKER_
 void iplysnd() {
 
@@ -1726,6 +1740,12 @@ unsigned char* iexe() {
     case I_IODP: //中間コードがIODPの場合
       cip++;
       iiodp();
+      break;
+#endif
+#ifdef _IOEXP_
+    case I_GKOPT: //中間コードがGKOPTの場合
+      cip++;
+      igkopt();
       break;
 #endif
 #ifdef _SPEAKER_
