@@ -31,7 +31,7 @@ volatile short g_en_esc = 1;
 
 uint8_t table_key2code[2][8][8] = { // Shiftを押した状態も考慮
 { // 何も押していない時
-    {0x0f, CODE_CTRL, CODE_ALT, 0x20, CODE_UP, CODE_DOWN, CODE_LEFT, CODE_RIGHT}, // L-Shift, L-Ctrl, L-Alt, Space, ↑, ↓, ←, →
+    {0x0e, CODE_CTRL, CODE_ALT, 0x20, CODE_UP, CODE_DOWN, CODE_LEFT, CODE_RIGHT}, // L-Shift, L-Ctrl, L-Alt, Space, ↑, ↓, ←, →
     {0x0f, 0x2d, 0x5b, 0x61, 0x73, 0x74, 0x72, 0x34}, // R-Shift, -, [, a, s, t, r, 4
     {CODE_NERD, 0x3d, 0x27, 0x7a, 0x64, 0x79, 0x65, 0x35}, // NERD, =, ', z, d, y, e, 5
     {0x0d, 0x5d, 0x3b, 0x78, 0x66, 0x75, 0x77, 0x36}, // Enter, ], ;, x, f, u, w, 6
@@ -41,7 +41,7 @@ uint8_t table_key2code[2][8][8] = { // Shiftを押した状態も考慮
     {CODE_2NDFN, CODE_INS, 0x6d, 0x6e, 0x6b, 0x6c, 0x33, 0x30}  // 2ndFn, Ins, m, n, k, l, 3, 0
 },
 { // Shift押した状態
-    {0x0f, CODE_CTRL, CODE_ALT, 0x20, CODE_UP, CODE_DOWN, CODE_LEFT, CODE_RIGHT}, // L-Shift, L-Ctrl, L-Alt, Space, ↑, ↓, ←, →
+    {0x0e, CODE_CTRL, CODE_ALT, 0x20, CODE_UP, CODE_DOWN, CODE_LEFT, CODE_RIGHT}, // L-Shift, L-Ctrl, L-Alt, Space, ↑, ↓, ←, →
     {0x0f, 0x5f, 0x7b, 0x41, 0x53, 0x54, 0x52, 0x24}, // R-Shift, _, {, A, S, T, R, $
     {CODE_NERD, 0x2b, 0x22, 0x5a, 0x44, 0x59, 0x45, 0x25}, // NERD, +, ", Z, D, Y, E, %
     {0x0d, 0x7d, 0x3a, 0x58, 0x46, 0x55, 0x57, 0x5e}, // Enter, }, :, X, F, U, W, ^
@@ -145,7 +145,7 @@ bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
     ioexp_getchrinfo(chrinfo);
     if(chrinfo[0] != 0x00) { // 未入力、未定義のキーは処理しない
         if(chrinfo[1] == button_push) {
-            if(chrinfo[0] == 0x0f) { // Shift
+            if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) { // Shift
                 status_shift = true;
             } else if(chrinfo[0] == CODE_CAPS) { // Caps
                 status_caps = !status_caps;
@@ -158,7 +158,7 @@ bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
                 flg_getchr_available = true;
             }
         } else {
-            if(chrinfo[0] == 0x0f) status_shift = false; // shift
+            if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) status_shift = false; // shift
         }
     }
     return true;
@@ -275,7 +275,7 @@ short ioexp_getkey(short index) {
             current_keyinfo_tmp <<= 7-j;
             if(prev_keyinfo_tmp != current_keyinfo_tmp) {
                 // keyscanがストップしているのでフラグが立っていればShiftとEscを拾う
-                if(g_en_shift && table_key2code[status_shift][j][i] == 0x0f) { // Shift
+                if(g_en_shift && (table_key2code[status_shift][j][i] == 0x0e || table_key2code[status_shift][j][i] == 0x0f)) { // Shift
                     status_shift = true;
                     flg_shift = true;
                 } else if (g_en_esc && table_key2code[status_shift][j][i] == 0x1b) { // Esc
