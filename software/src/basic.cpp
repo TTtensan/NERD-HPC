@@ -30,7 +30,7 @@
 // TO-DO Rewrite defined values to fit your machine as needed
 #define SIZE_LINE 64 //Command line buffer length + NULL
 #define SIZE_IBUF 64 //i-code conversion buffer size
-#define SIZE_LIST 256 //List buffer size
+#define SIZE_LIST 1024 //List buffer size
 #define SIZE_ARRY 32 //Array area size
 #define SIZE_GSTK 6 //GOSUB stack size(2/nest)
 #define SIZE_LSTK 15 //FOR stack size(5/nest)
