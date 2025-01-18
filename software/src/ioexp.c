@@ -175,6 +175,12 @@ void ioexp_start_keyscan_timer() {
 }
 
 void ioexp_init() {
+    
+    // リセット
+    gpio_put(PIN_IOEXP_RST, 0);
+    sleep_ms(60);
+    gpio_put(PIN_IOEXP_RST, 1);
+    sleep_ms(60);
 
     // 出力初期値を設定
     // 1 = High, 0 = Low

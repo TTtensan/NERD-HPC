@@ -25,6 +25,12 @@ uint8_t c_code_prev = '0';
 
 void lcd_init(){
 
+    // リセット
+    gpio_put(PIN_LCD_RST, 0);
+    sleep_ms(60);
+    gpio_put(PIN_LCD_RST, 1);
+    sleep_ms(60);
+
     lcd_write_command(0b10101110); // Display = OFF
     lcd_write_command(0b10100000); // ADC = normal
     lcd_write_command(0b11001000); // Common output = revers
