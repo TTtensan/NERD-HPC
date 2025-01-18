@@ -8410,7 +8410,19 @@
 		(layer "Edge.Cuts")
 		(uuid "fe22e158-0322-4330-9910-b872430eb36d")
 	)
-	(gr_text "Rev.3"
+	(gr_text "hello, nerld"
+		(at 97 83.8 0)
+		(layer "B.SilkS")
+		(uuid "195da4e8-370c-4ac0-b785-bcba1b5cdb7d")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+			(justify bottom mirror)
+		)
+	)
+	(gr_text "Rev.4"
 		(at 195.5 130 0)
 		(layer "B.SilkS")
 		(uuid "4473a5dc-f6f0-41ee-a808-2dfdea8c981d")
@@ -8458,7 +8470,7 @@
 			(justify bottom)
 		)
 	)
-	(gr_text "IO3_A"
+	(gr_text "IO3"
 		(at 195.122 63.708 90)
 		(layer "F.SilkS")
 		(uuid "02badfc3-4fe4-428a-be3e-187a68584198")
@@ -8746,7 +8758,7 @@
 			(justify bottom)
 		)
 	)
-	(gr_text "IO4_A"
+	(gr_text "IO4"
 		(at 197.662 63.708 90)
 		(layer "F.SilkS")
 		(uuid "47daf68d-d4d4-495c-8237-752172d1bd8c")
