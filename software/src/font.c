@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "font.h"
 
 const uint8_t font[FONT_NUM][5] =

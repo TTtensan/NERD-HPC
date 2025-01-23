@@ -97,8 +97,9 @@ uint8_t const * tud_hid_descriptor_report_cb(uint8_t instance)
 
 enum
 {
+  ITF_NUM_CDC = 0,
+  ITF_NUM_CDC_DATA,
   ITF_NUM_HID,
-  ITF_NUM_CDC,
   ITF_NUM_TOTAL
 };
 
