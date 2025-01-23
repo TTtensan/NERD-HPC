@@ -7,6 +7,10 @@
 
 ## ファームウェアのビルド方法
 ```
+(Ubuntu Desktop 24.04.1 LTS)
+sudo apt install cmake python3 build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+```
+```
 git clone --recursive https://github.com/TTtensan/NERD-HPC.git
 cd NERD-HPC/software/_build
 cmake ..
