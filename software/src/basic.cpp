@@ -38,7 +38,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.5.3"
+#define STR_VERSION "1.6.0d"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -122,7 +122,7 @@ const char *kwtbl[] = {
   "PLYSND",
   "STPSND",
 #endif
-  "LIST", "RUN", "NEW"
+  "LIST", "ALL", "RUN", "NEW"
 };
 
 // Keyword count
@@ -174,7 +174,7 @@ enum {
   I_PLYSND,
   I_STPSND,
 #endif
-  I_LIST, I_RUN, I_NEW,
+  I_LIST, I_ALL, I_RUN, I_NEW,
   I_NUM, I_VAR, I_STR,
   I_EOL
 };
@@ -199,7 +199,7 @@ const unsigned char i_nsa[] = {
 #ifdef _SPEAKER_
   I_STPSND,
 #endif
-  I_ARRAY, I_RND, I_ABS, I_SIZE
+  I_ARRAY, I_RND, I_ABS, I_SIZE, I_ALL
 };
 
 // 前が定数か変数のとき前の空白をなくす中間コード
@@ -1811,16 +1811,126 @@ void ilist() {
     *clp && (getlineno(clp) < lineno);
     clp += *clp); //行ポインタを次の行へ進める
 
-  //リストを表示する
-  while (*clp) { //行ポインタが末尾を指すまで繰り返す
-    putnum(getlineno(clp), 0); //行番号を表示
-    c_putch(' '); //空白を入れる
-    putlist(clp + 3); //行番号より後ろを文字列に変換して表示
-    if (err) //もしエラーが生じたら
-      break; //繰り返しを打ち切る
-    newline(); //改行
-    clp += *clp; //行ポインタを次の行へ進める
+  if(*cip == I_ALL) { // 引数にALLがあれば全行を表示
+      cip++;
+      while (*clp) { //行ポインタが末尾を指すまで繰り返す
+          putnum(getlineno(clp), 0); //行番号を表示
+          c_putch(' '); //空白を入れる
+          putlist(clp + 3); //行番号より後ろを文字列に変換して表示
+          if (err) //もしエラーが生じたら
+              break; //繰り返しを打ち切る
+          newline(); //改行
+          clp += *clp; //行ポインタを次の行へ進める
+      }
+      return;
   }
+
+  //リストを表示する
+  if(*clp == 0) { // 末尾なら一行前を表示
+      short prev_lineno;
+      for ( //次の手順で繰り返す
+              clp = listbuf; //行ポインタを先頭行へ設定
+                             //末尾ではなくて表示開始行より前なら繰り返す
+              *clp && (getlineno(clp) < lineno);
+              clp += *clp) { //行ポインタを次の行へ進める
+          prev_lineno = getlineno(clp); // linenoの一行前の行番号を取得
+      }
+      lineno = prev_lineno; // linenoを一行前に設定
+      for ( //次の手順で繰り返す
+              clp = listbuf; //行ポインタを先頭行へ設定
+                             //末尾ではなくて表示開始行より前なら繰り返す
+              *clp && (getlineno(clp) < lineno);
+              clp += *clp); //行ポインタを次の行へ進める
+  }
+  lcd_cls(white, text);
+  putnum(getlineno(clp), 0); //行番号を表示
+  c_putch(' '); //空白を入れる
+  putlist(clp + 3); //行番号より後ろを文字列に変換して表示
+  if (err) //もしエラーが生じたら
+      return; //繰り返しを打ち切る
+  newline();
+
+  //リストを表示する
+  while (true) { //Escを押すと中断
+
+      short chr = c_getch();
+      if(chr == 0x1b) { // Escかキーボード入力の矢印キーか判断
+          if(tud_cdc_available()){
+              short next_chr = getchar();
+              if(next_chr == 91){
+                  if(tud_cdc_available()){
+                      next_chr = getchar();
+                      switch(next_chr){
+                          case 65:
+                            chr = CODE_UP;
+                            break;
+                          case 66:
+                            chr = CODE_DOWN;
+                            break;
+                          case 67:
+                            chr = CODE_RIGHT;
+                            break;
+                          case 68:
+                            chr = CODE_LEFT;
+                            break;
+                      }
+                  }
+              }
+          }
+      }
+
+      if(chr == CODE_UP){
+          short prev_lineno;
+          for ( //次の手順で繰り返す
+            clp = listbuf; //行ポインタを先頭行へ設定
+            //末尾ではなくて表示開始行より前なら繰り返す
+            *clp && (getlineno(clp) < lineno);
+            clp += *clp) { //行ポインタを次の行へ進める
+              prev_lineno = getlineno(clp); // linenoの一行前の行番号を取得
+          }
+          if(lineno != prev_lineno){ // 一番初めの行なら処理しない
+              lineno = prev_lineno; // linenoを一行前に設定
+              for ( //次の手順で繰り返す
+                      clp = listbuf; //行ポインタを先頭行へ設定
+                                     //末尾ではなくて表示開始行より前なら繰り返す
+                      *clp && (getlineno(clp) < lineno);
+                      clp += *clp); //行ポインタを次の行へ進める
+
+              lcd_cls(white, text);
+              putnum(getlineno(clp), 0); //行番号を表示
+              c_putch(' '); //空白を入れる
+              putlist(clp + 3); //行番号より後ろを文字列に変換して表示
+              if (err) //もしエラーが生じたら
+                  return; //繰り返しを打ち切る
+              newline();
+          }
+
+          sleep_ms(30); // チャタリング対策
+          while(ioexp_getkey(0) == CODE_UP);
+          sleep_ms(30); // チャタリング対策
+
+      }else if((chr == CODE_DOWN) && *(clp + *clp)){ // clp+*clpが末尾なら処理しない
+          clp += *clp; //行ポインタを次の行へ進める
+          lineno = getlineno(clp);
+
+          lcd_cls(white, text);
+          putnum(getlineno(clp), 0); //行番号を表示
+          c_putch(' '); //空白を入れる
+          putlist(clp + 3); //行番号より後ろを文字列に変換して表示
+          if (err) //もしエラーが生じたら
+              return; //繰り返しを打ち切る
+          newline();
+
+          sleep_ms(30); // チャタリング対策
+          while(ioexp_getkey(0) == CODE_DOWN);
+          sleep_ms(30); // チャタリング対策
+      }else if(chr == 0x1b){ // EscでLISTモードを抜ける
+          lcd_cls(white, text);
+          return;
+      }
+  }
+  //newline(); //改行
+  //clp += *clp; //行ポインタを次の行へ進める
 }
 
 //NEW command handler
@@ -2072,7 +2182,8 @@ void icom() {
   case I_LIST: //I_LISTの場合（LIST命令）
     cip++; //中間コードポインタを次へ進める
     if (*cip == I_EOL || //もし行末か、あるいは
-      *(cip + 3) == I_EOL) //続いて引数があれば
+      *(cip + 3) == I_EOL || //続いて引数があれば
+      *cip == I_ALL)
       ilist(); //LIST命令を実行
     else //そうでなければ
       err = ERR_SYNTAX; //エラー番号をセット

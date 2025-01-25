@@ -103,6 +103,8 @@ void lcd_cls(color cl, screen sc){
         }
     }
 
+    lcd_set_cursor(0, 0);
+
 }
 
 void lcd_disp_vbuf(){

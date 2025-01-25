@@ -4,17 +4,6 @@
 #include "pin.h"
 #include "ioexp.h"
 
-#define CODE_NERD 0xf5
-#define CODE_INS 0xf6
-#define CODE_CTRL 0xf7
-#define CODE_ALT 0xf8
-#define CODE_RIGHT 0xf9
-#define CODE_LEFT 0xfa
-#define CODE_DOWN 0xfb
-#define CODE_UP 0xfc
-#define CODE_2NDFN 0xfd
-#define CODE_CAPS 0xfe
-
 static struct repeating_timer ioexp_timer;
 
 // 前回スキャン時のキーの押下情報 1ビットで記録 0=押下 1=リリース

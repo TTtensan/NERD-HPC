@@ -28,6 +28,17 @@ extern "C" {
 #define IOEXP_OLATA      0x14
 #define IOEXP_OLATB      0x15
 
+#define CODE_NERD 0xf5
+#define CODE_INS 0xf6
+#define CODE_CTRL 0xf7
+#define CODE_ALT 0xf8
+#define CODE_RIGHT 0xf9
+#define CODE_LEFT 0xfa
+#define CODE_DOWN 0xfb
+#define CODE_UP 0xfc
+#define CODE_2NDFN 0xfd
+#define CODE_CAPS 0xfe
+
 typedef enum {
     button_push,
     button_release
