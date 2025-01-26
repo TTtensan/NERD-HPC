@@ -38,7 +38,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.6.1"
+#define STR_VERSION "1.6.2d"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -1796,6 +1796,9 @@ void irun() {
 
 // LIST command handler
 void ilist() {
+
+  if(*listbuf == 0) return; // 何も入力されていなければ表示しない
+
   short lineno; //表示開始行番号
 
   //表示開始行番号の設定
