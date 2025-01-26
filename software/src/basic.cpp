@@ -38,7 +38,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.6.0"
+#define STR_VERSION "1.6.1d"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -2067,7 +2067,7 @@ void isave() {
 //        return;
 //    }
 
-    fr = f_open(&fp, buf, FA_OPEN_ALWAYS | FA_WRITE);
+    fr = f_open(&fp, buf, FA_CREATE_ALWAYS | FA_WRITE);
     if (FR_OK != fr && FR_EXIST != fr) {
         err = ERR_FNOPEN;
         return;
