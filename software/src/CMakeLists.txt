@@ -14,6 +14,7 @@ add_executable(${TARGET_NAME}
         mcore.c
         usb_descriptors.c
         usb.c
+        msc_disk.c
         basic.cpp
         )
 
