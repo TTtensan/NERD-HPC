@@ -33,6 +33,8 @@
 #define PIN_GEN_IO_3 27
 #define PIN_GEN_IO_4 28
 
+#define UART_ID_GENIO uart1
+
 void pin_init();
 
 #endif

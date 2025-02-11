@@ -62,6 +62,17 @@ static const char *gpio_irq_str[] = {
         "EDGE_RISE"   // 0x8
 };
 
+void io_uart_send(uint8_t data) {
+    uart_putc_raw(UART_ID_GENIO, data);
+}
+
+uint8_t io_uart_get() {
+    if (uart_is_readable(UART_ID_GENIO)) {
+        return uart_getc(UART_ID_GENIO);
+    }
+    return 0;
+}
+
 void gpio_event_string(char *buf, uint32_t events) {
     for (uint i = 0; i < 4; i++) {
         uint mask = (1 << i);

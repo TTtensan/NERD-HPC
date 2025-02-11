@@ -15,6 +15,8 @@ void io_pull_down(uint gpio);
 void io_disable_pulls(uint gpio);
 void io_put(uint gpio, bool value);
 bool io_get(uint gpio);
+void io_uart_send(uint8_t data);
+uint8_t io_uart_get();
 void gpio_event_string(char *buf, uint32_t events);
 
 #ifdef __cplusplus

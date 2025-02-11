@@ -20,7 +20,7 @@ void pin_init(){
     gpio_set_pulls(PIN_IOEXP_SCL, true, false);   // enable internal pull-up of SCL_PIN=GP21
 
     // General IO
-    uart_init(uart1, 115200);
+    uart_init(UART_ID_GENIO, 115200);
     gpio_set_function(PIN_GEN_IO_TX, GPIO_FUNC_UART);
     gpio_set_function(PIN_GEN_IO_RX, GPIO_FUNC_UART);
 

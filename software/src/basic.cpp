@@ -113,6 +113,8 @@ const char *kwtbl[] = {
   "IOPU",
   "IOPD",
   "IODP",
+  "IOUS",
+  "IOUG",
 #endif
 #ifdef _IOEXP_
   "GKOPT",
@@ -165,6 +167,8 @@ enum {
   I_IOPU,
   I_IOPD,
   I_IODP,
+  I_IOUS,
+  I_IOUG,
 #endif
 #ifdef _IOEXP_
   I_GKOPT,
@@ -192,6 +196,7 @@ const unsigned char i_nsa[] = {
 #endif
 #ifdef _IO_
   I_IOGET,
+  I_IOUG,
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
@@ -748,6 +753,11 @@ short iioget(short gpio) {
     short status = io_get(gpio);
     return status;
 }
+
+short iioug() {
+    short data = io_uart_get();
+    return data;
+}
 #endif
 
 #ifdef _IOEXP_
@@ -820,6 +830,11 @@ short ivalue() {
         break;
     }
     value = iioget(value);
+    break;
+
+  case I_IOUG: //関数IOUGの場合
+    cip++;
+    value = iioug();
     break;
 #endif
 
@@ -1440,6 +1455,19 @@ void iioput() {
 
     io_put(gpio, value);
 }
+
+void iious() {
+
+    short data;
+    data = iexp(); //値を取得
+    if(err) return;
+    if(data < 0 || 255 < data) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    io_uart_send((uint8_t)data);
+}
 #endif
 
 #ifdef _IOEXP_
@@ -1740,6 +1768,10 @@ unsigned char* iexe() {
     case I_IODP: //中間コードがIODPの場合
       cip++;
       iiodp();
+      break;
+    case I_IOUS: //中間コードがIOUSの場合
+      cip++;
+      iious();
       break;
 #endif
 #ifdef _IOEXP_
