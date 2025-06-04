@@ -17,6 +17,11 @@ void io_put(uint gpio, bool value);
 bool io_get(uint gpio);
 void io_uart_send(uint8_t data);
 uint8_t io_uart_get();
+void io_i2c_master_init();
+void io_i2c_slave_init();
+void io_i2c_set_address(uint8_t addr);
+void io_i2c_send(uint8_t data);
+uint8_t io_i2c_receive();
 void gpio_event_string(char *buf, uint32_t events);
 
 #ifdef __cplusplus

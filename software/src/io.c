@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <pico/i2c_slave.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "pin.h"
@@ -6,6 +7,8 @@
 
 static char event_str[128];
 uint8_t buf_i2c[2];
+uint8_t addr_i2c = 0x42;
+uint8_t data_i2c_received = 0;
 
 uint io_convert_pinno(uint gpio){
     switch(gpio){
@@ -29,6 +32,7 @@ void io_button_callback(uint gpio, uint32_t events){
 void io_init(){
     gpio_set_irq_enabled_with_callback(PIN_SW, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &io_button_callback);
     gpio_pull_up(PIN_SW);
+    io_i2c_master_init();
 }
 
 void io_set_dir(uint gpio, bool out){
@@ -71,6 +75,41 @@ uint8_t io_uart_get() {
         return uart_getc(UART_ID_GENIO);
     }
     return 0;
+}
+
+static void i2c_slave_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
+    switch (event) {
+    case I2C_SLAVE_RECEIVE: // master has written some data
+        data_i2c_received = i2c_read_byte_raw(i2c);
+        break;
+    case I2C_SLAVE_REQUEST: // master is requesting data
+        break;
+    case I2C_SLAVE_FINISH: // master has signalled Stop / Restart
+        break;
+    default:
+        break;
+    }
+}
+
+void io_i2c_master_init() {
+    i2c_slave_deinit(I2C_ID_GENIO);
+}
+
+void io_i2c_slave_init() {
+    i2c_slave_init(I2C_ID_GENIO, addr_i2c, &i2c_slave_handler);
+}
+
+void io_i2c_set_address(uint8_t addr) {
+    addr_i2c = addr;
+}
+
+void io_i2c_send(uint8_t data) {
+    uint8_t data_i2c_send = data;
+    i2c_write_blocking(I2C_ID_GENIO, addr_i2c, &data_i2c_send, 1, false);
+}
+
+uint8_t io_i2c_receive() {
+    return data_i2c_received;
 }
 
 void gpio_event_string(char *buf, uint32_t events) {

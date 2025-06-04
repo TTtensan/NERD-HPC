@@ -14,21 +14,21 @@ void pin_init(){
     gpio_put(PIN_IOEXP_RST, 1);
 
     i2c_init(i2c0, 100000);
-    gpio_set_function(PIN_IOEXP_SDA, GPIO_FUNC_I2C); // set function of SDA_PIN=GP20 I2C
-    gpio_set_function(PIN_IOEXP_SCL, GPIO_FUNC_I2C); // set function of SCL_PIN=GP21 I2C
-    gpio_set_pulls(PIN_IOEXP_SDA, true, false);   // enable internal pull-up of SDA_PIN=GP20
-    gpio_set_pulls(PIN_IOEXP_SCL, true, false);   // enable internal pull-up of SCL_PIN=GP21
+    gpio_set_function(PIN_IOEXP_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(PIN_IOEXP_SCL, GPIO_FUNC_I2C);
+    gpio_set_pulls(PIN_IOEXP_SDA, true, false);
+    gpio_set_pulls(PIN_IOEXP_SCL, true, false);
 
     // General IO
     uart_init(UART_ID_GENIO, 115200);
     gpio_set_function(PIN_GEN_IO_TX, GPIO_FUNC_UART);
     gpio_set_function(PIN_GEN_IO_RX, GPIO_FUNC_UART);
 
-    i2c_init(i2c1, 100 * 1000);
+    i2c_init(I2C_ID_GENIO, 100000);
     gpio_set_function(PIN_GEN_IO_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_GEN_IO_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(PIN_GEN_IO_SDA);
-    gpio_pull_up(PIN_GEN_IO_SCL);
+    gpio_set_pulls(PIN_GEN_IO_SDA, true, false);
+    gpio_set_pulls(PIN_GEN_IO_SCL, true, false);
 
     gpio_init(PIN_GEN_IO_1);
     gpio_set_dir(PIN_GEN_IO_1, GPIO_OUT);

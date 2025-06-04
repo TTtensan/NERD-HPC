@@ -115,6 +115,10 @@ const char *kwtbl[] = {
   "IODP",
   "IOUS",
   "IOUG",
+  "IOIIM",
+  "IOIIS",
+  "IOIS",
+  "IOIR",
 #endif
 #ifdef _IOEXP_
   "GKOPT",
@@ -169,6 +173,10 @@ enum {
   I_IODP,
   I_IOUS,
   I_IOUG,
+  I_IOIIM,
+  I_IOIIS,
+  I_IOIS,
+  I_IOIR,
 #endif
 #ifdef _IOEXP_
   I_GKOPT,
@@ -197,6 +205,9 @@ const unsigned char i_nsa[] = {
 #ifdef _IO_
   I_IOGET,
   I_IOUG,
+  I_IOIIM,
+  I_IOIIS,
+  I_IOIR,
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
@@ -758,6 +769,11 @@ short iioug() {
     short data = io_uart_get();
     return data;
 }
+
+short iioir() {
+    short data = io_i2c_receive();
+    return data;
+}
 #endif
 
 #ifdef _IOEXP_
@@ -835,6 +851,11 @@ short ivalue() {
   case I_IOUG: //関数IOUGの場合
     cip++;
     value = iioug();
+    break;
+
+  case I_IOIR: //関数IOIRの場合
+    cip++;
+    value = iioir();
     break;
 #endif
 
@@ -1468,6 +1489,32 @@ void iious() {
 
     io_uart_send((uint8_t)data);
 }
+
+void iioiim() {
+
+    io_i2c_master_init();
+}
+
+void iioiis() {
+
+    io_i2c_slave_init();
+}
+
+void iiois() {
+
+    short data;
+    data = iexp(); //値を取得
+    if(err) return;
+    if(data < 0 || 255 < data) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    uint8_t send_data;
+    send_data = (uint8_t)data;
+
+    io_i2c_send(send_data);
+}
 #endif
 
 #ifdef _IOEXP_
@@ -1772,6 +1819,18 @@ unsigned char* iexe() {
     case I_IOUS: //中間コードがIOUSの場合
       cip++;
       iious();
+      break;
+    case I_IOIIM: //中間コードがIOIIMの場合
+      cip++;
+      iioiim();
+      break;
+    case I_IOIIS: //中間コードがIOIISの場合
+      cip++;
+      iioiis();
+      break;
+    case I_IOIS: //中間コードがIOISの場合
+      cip++;
+      iiois();
       break;
 #endif
 #ifdef _IOEXP_

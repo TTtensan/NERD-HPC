@@ -21,6 +21,7 @@ add_executable(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME}
     pico_stdlib
     pico_multicore
+    pico_i2c_slave
     hardware_pwm
     hardware_spi
     hardware_i2c

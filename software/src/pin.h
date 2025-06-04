@@ -1,6 +1,8 @@
 #ifndef PIN_H_
 #define PIN_H_
 
+#include "hardware/i2c.h"
+
 #define PIN_IOEXP_SDA 0
 #define PIN_IOEXP_SCL 1
 #define PIN_IOEXP_INTA 2
@@ -34,6 +36,7 @@
 #define PIN_GEN_IO_4 28
 
 #define UART_ID_GENIO uart1
+#define I2C_ID_GENIO i2c1
 
 void pin_init();
 
