@@ -16,7 +16,7 @@ void io_disable_pulls(uint gpio);
 void io_put(uint gpio, bool value);
 bool io_get(uint gpio);
 void io_uart_send(uint8_t data);
-uint8_t io_uart_get();
+uint8_t io_uart_receive();
 void io_i2c_master_init();
 void io_i2c_slave_init();
 void io_i2c_set_address(uint8_t addr);

@@ -114,7 +114,7 @@ const char *kwtbl[] = {
   "IOPD",
   "IODP",
   "IOUS",
-  "IOUG",
+  "IOUR",
   "IOIIM",
   "IOIIS",
   "IOIS",
@@ -172,7 +172,7 @@ enum {
   I_IOPD,
   I_IODP,
   I_IOUS,
-  I_IOUG,
+  I_IOUR,
   I_IOIIM,
   I_IOIIS,
   I_IOIS,
@@ -204,7 +204,7 @@ const unsigned char i_nsa[] = {
 #endif
 #ifdef _IO_
   I_IOGET,
-  I_IOUG,
+  I_IOUR,
   I_IOIIM,
   I_IOIIS,
   I_IOIR,
@@ -765,8 +765,8 @@ short iioget(short gpio) {
     return status;
 }
 
-short iioug() {
-    short data = io_uart_get();
+short iiour() {
+    short data = io_uart_receive();
     return data;
 }
 
@@ -848,9 +848,9 @@ short ivalue() {
     value = iioget(value);
     break;
 
-  case I_IOUG: //関数IOUGの場合
+  case I_IOUR: //関数IOURの場合
     cip++;
-    value = iioug();
+    value = iiour();
     break;
 
   case I_IOIR: //関数IOIRの場合

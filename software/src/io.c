@@ -70,7 +70,7 @@ void io_uart_send(uint8_t data) {
     uart_putc_raw(UART_ID_GENIO, data);
 }
 
-uint8_t io_uart_get() {
+uint8_t io_uart_receive() {
     if (uart_is_readable(UART_ID_GENIO)) {
         return uart_getc(UART_ID_GENIO);
     }
