@@ -850,11 +850,23 @@ short ivalue() {
 
   case I_IOUR: //関数IOURの場合
     cip++;
+    //もし後ろに「()」がなかったら
+    if ((*cip != I_OPEN) || (*(cip + 1) != I_CLOSE)) {
+      err = ERR_PAREN; //エラー番号をセット
+      break; //ここで打ち切る
+    }
+    cip += 2; //中間コードポインタを「()」の次へ進める
     value = iiour();
     break;
 
   case I_IOIR: //関数IOIRの場合
     cip++;
+    //もし後ろに「()」がなかったら
+    if ((*cip != I_OPEN) || (*(cip + 1) != I_CLOSE)) {
+      err = ERR_PAREN; //エラー番号をセット
+      break; //ここで打ち切る
+    }
+    cip += 2; //中間コードポインタを「()」の次へ進める
     value = iioir();
     break;
 #endif

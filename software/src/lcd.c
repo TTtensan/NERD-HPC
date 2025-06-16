@@ -103,7 +103,7 @@ void lcd_cls(color cl, screen sc){
         }
     }
 
-    lcd_set_cursor(0, 0);
+    if(sc == text) lcd_set_cursor(0, 0);
 
 }
 
