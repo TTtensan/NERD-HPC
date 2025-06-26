@@ -305,7 +305,7 @@ void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
     uint8_t font_code, font_data_col, dot_pos, dot_extract;
     bool dot_cl;
 
-    font_code = c_code - 0x20; // 文字コードをプログラム内のフォントコードに変換
+    font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
     for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
         dot_extract = 0b00000001;
@@ -329,7 +329,7 @@ void lcd_print_c_section(uint8_t x_sec, uint8_t y_sec, uint8_t c_code, color cl)
     uint8_t font_code, font_data_col, dot_pos, dot_extract;
     bool dot_cl;
 
-    font_code = c_code - 0x20; // 文字コードをプログラム内のフォントコードに変換
+    font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
     for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
         v_buf[y_sec][2+x_sec*6+font_data_col] = (cl) ? font[font_code][font_data_col] : ~font[font_code][font_data_col]; // 左端2列、右端1列空ける
