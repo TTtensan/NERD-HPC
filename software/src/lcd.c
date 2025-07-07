@@ -305,7 +305,7 @@ void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
     uint8_t font_code, font_data_col, dot_pos, dot_extract;
     bool dot_cl;
 
-    font_code = c_code - 0x20; // 文字コードをプログラム内のフォントコードに変換
+    font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
     for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
         dot_extract = 0b00000001;
@@ -313,6 +313,32 @@ void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
             dot_cl = (font[font_code][font_data_col] & dot_extract) ? 1 : 0; // フォントデータ抽出
             if(!cl) dot_cl = !dot_cl; // 白色なら反転
             lcd_pset(x_pos, y_pos+dot_pos, dot_cl, text);
+            dot_extract <<= 1; // フォントデータの抽出を次のビットに移行
+        }
+        x_pos++;
+    }
+
+}
+
+void lcd_gprint_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl, bool transparent){
+
+    uint8_t font_code, font_data_col, dot_pos, dot_extract;
+    bool dot_cl;
+
+    font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
+
+    for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
+        dot_extract = 0b00000001;
+        for(dot_pos=0; dot_pos<8; dot_pos++) { // フォントデータを列の上から1ビットずつ描画
+            dot_cl = (font[font_code][font_data_col] & dot_extract) ? 1 : 0; // フォントデータ抽出
+            if(!cl) dot_cl = !dot_cl; // 白色なら反転
+
+            // 透過なら文字だけを描画
+            if(transparent) {
+              if((cl && dot_cl) || (!cl && !dot_cl)) lcd_pset(x_pos, y_pos+dot_pos, dot_cl, graphic);
+            } else {
+              lcd_pset(x_pos, y_pos+dot_pos, dot_cl, graphic);
+            }
             dot_extract <<= 1; // フォントデータの抽出を次のビットに移行
         }
         x_pos++;
@@ -329,7 +355,7 @@ void lcd_print_c_section(uint8_t x_sec, uint8_t y_sec, uint8_t c_code, color cl)
     uint8_t font_code, font_data_col, dot_pos, dot_extract;
     bool dot_cl;
 
-    font_code = c_code - 0x20; // 文字コードをプログラム内のフォントコードに変換
+    font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
     for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
         v_buf[y_sec][2+x_sec*6+font_data_col] = (cl) ? font[font_code][font_data_col] : ~font[font_code][font_data_col]; // 左端2列、右端1列空ける

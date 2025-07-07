@@ -38,7 +38,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.7.1"
+#define STR_VERSION "1.8.0d"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -102,6 +102,7 @@ const char *kwtbl[] = {
   "GRECT",
   "GCIRCLE",
   "GPLAYNM",
+  "GPUTC",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -160,6 +161,7 @@ enum {
   I_GRECT,
   I_GCIRCLE,
   I_GPLAYNM,
+  I_GPUTC,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -1389,6 +1391,29 @@ void igplaynm() {
             return;
     }
 }
+
+void igputc() {
+
+    short x_pos, y_pos, c_code, color, transparent;
+    x_pos = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos = iexp();
+    if(err) return;
+    cip++;
+    c_code = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    cip++;
+    transparent = iexp();
+    if(err) return;
+
+    if(color) lcd_gprint_c_free(x_pos, y_pos, c_code, black, transparent);
+    else lcd_gprint_c_free(x_pos, y_pos, c_code, white, transparent);
+
+}
 #endif
 
 #ifdef _USB_
@@ -1799,6 +1824,10 @@ unsigned char* iexe() {
     case I_GPLAYNM: //中間コードがGPLAYNMの場合
       cip++;
       igplaynm();
+      break;
+    case I_GPUTC: //中間コードがGPUTCの場合
+      cip++;
+      igputc();
       break;
 #endif
 #ifdef _USB_
