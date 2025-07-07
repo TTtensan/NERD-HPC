@@ -1,3 +1,7 @@
+// reference font data
+// https://hatakekara.com/aqm1248a/
+
+
 #include <stdio.h>
 #include <stdint.h>
 #include "font.h"
