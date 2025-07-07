@@ -44,6 +44,7 @@ void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, co
 void lcd_rect(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl, bool fill);
 void lcd_circle(uint8_t x_pos, uint8_t y_pos, uint8_t rad, color cl, bool fill);
 void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl);
+void lcd_gprint_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl, bool transparent);
 void lcd_print_c_section(uint8_t x_sec, uint8_t y_sec, uint8_t c_code, color cl);
 void lcd_print_c_auto(uint8_t c_code, color cl);
 void lcd_print_str_free(uint8_t x_pos, uint8_t y_pos, char* str, color cl);
