@@ -2,6 +2,7 @@
 #include "stdlib.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
+#include "font.h"
 #include "pin.h"
 #include "lcd.h"
 #include "speaker.h"
@@ -31,6 +32,7 @@ int main() {
     printf("Hello, I'm NERD BOY\n");
 
     srand(get_seed());
+    font_init();
     pin_init();
     io_init();
     ioexp_init();
