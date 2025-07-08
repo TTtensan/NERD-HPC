@@ -83,7 +83,7 @@ const char *kwtbl[] = {
   "IF", "REM", "STOP",
   "INPUT", "PRINT", "LET",
   ",", ";",
-  "-", "+", "*", "/", "(", ")",
+  "-", "+", "*", "/", "%", "(", ")",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
 #ifdef _SLEEP_
@@ -142,7 +142,7 @@ enum {
   I_IF, I_REM, I_STOP,
   I_INPUT, I_PRINT, I_LET,
   I_COMMA, I_SEMI,
-  I_MINUS, I_PLUS, I_MUL, I_DIV, I_OPEN, I_CLOSE,
+  I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
 #ifdef _SLEEP_
@@ -197,7 +197,7 @@ enum {
 // 後ろに空白を入れない中間コード
 const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
-  I_MINUS, I_PLUS, I_MUL, I_DIV, I_OPEN, I_CLOSE,
+  I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
 #ifdef _LCD_
   I_CLS,
@@ -222,7 +222,7 @@ const unsigned char i_nsa[] = {
 
 // 前が定数か変数のとき前の空白をなくす中間コード
 const unsigned char i_nsb[] = {
-  I_MINUS, I_PLUS, I_MUL, I_DIV, I_OPEN, I_CLOSE,
+  I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_COMMA, I_SEMI, I_EOL
 };
@@ -949,6 +949,16 @@ short imul() {
     }
     value /= tmp; //割り算を実行
     break; //ここで打ち切る
+
+  case I_MOD: //剰余の場合
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    if (tmp == 0) { //もし演算値が0なら
+      err = ERR_DIVBY0; //エラー番号をセット
+      return -1; //終了
+    }
+    value %= tmp; //割り算を実行
+    break; 
 
   default: //以上のいずれにも該当しなかった場合
     return value; //値を持ち帰る
