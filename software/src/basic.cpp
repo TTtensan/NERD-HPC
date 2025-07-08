@@ -32,8 +32,8 @@
 #define SIZE_IBUF 64 //i-code conversion buffer size
 #define SIZE_LIST 32768 //List buffer size
 #define SIZE_ARRY 32 //Array area size
-#define SIZE_GSTK 6 //GOSUB stack size(2/nest)
-#define SIZE_LSTK 15 //FOR stack size(5/nest)
+#define SIZE_GSTK 20 //GOSUB stack size(2/nest)
+#define SIZE_LSTK 50 //FOR stack size(5/nest)
 
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
