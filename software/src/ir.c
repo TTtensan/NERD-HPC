@@ -7,6 +7,18 @@
 
 uint64_t arry_ir_interval[1280] = {0};
 
+void ir_put(bool value) {
+  if(value) {
+    pwm_set_chan_level(ir_slice_num, pwm_gpio_to_channel(PIN_IR_TX), ir_wrap / 2); // デューティ50%
+  } else {
+    pwm_set_chan_level(ir_slice_num, pwm_gpio_to_channel(PIN_IR_TX), ir_wrap); // デューティ50%
+  }
+}
+
+bool ir_get() {
+  return !gpio_get(PIN_IR_RX);
+}
+
 void ir_copy() {
     for(int i=0; i<1280; i++) arry_ir_interval[i] = 0;
     //to_us_since_boot(get_absolute_time());

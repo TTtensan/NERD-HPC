@@ -13,6 +13,7 @@
 #include "diskio.h"
 #include "sd.hpp"
 #include "io.h"
+#include "ir.h"
 #include "ioexp.h"
 #include "speaker.h"
 #include "usb.h"
@@ -23,6 +24,7 @@
 #define _LCD_
 #define _USB_
 #define _IO_
+#define _IR_
 #define _IOEXP_
 #define _SPEAKER_
 
@@ -121,6 +123,10 @@ const char *kwtbl[] = {
   "IOIS",
   "IOIR",
 #endif
+#ifdef _IR_
+  "IRPUT",
+  "IRGET",
+#endif
 #ifdef _IOEXP_
   "GKOPT",
   "GETKEY",
@@ -180,6 +186,10 @@ enum {
   I_IOIS,
   I_IOIR,
 #endif
+#ifdef _IR_
+  I_IRPUT,
+  I_IRGET,
+#endif
 #ifdef _IOEXP_
   I_GKOPT,
   I_GETKEY,
@@ -210,6 +220,9 @@ const unsigned char i_nsa[] = {
   I_IOIIM,
   I_IOIIS,
   I_IOIR,
+#endif
+#ifdef _IR_
+  I_IRGET,
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
@@ -778,6 +791,13 @@ short iioir() {
 }
 #endif
 
+#ifdef _IR_
+short iirget() {
+    short status = ir_get();
+    return status;
+}
+#endif
+
 #ifdef _IOEXP_
 
 short igetkey(short index) {
@@ -870,6 +890,19 @@ short ivalue() {
     }
     cip += 2; //中間コードポインタを「()」の次へ進める
     value = iioir();
+    break;
+#endif
+
+#ifdef _IR_
+  case I_IRGET: //関数IRGETの場合
+    cip++;
+    //もし後ろに「()」がなかったら
+    if ((*cip != I_OPEN) || (*(cip + 1) != I_CLOSE)) {
+      err = ERR_PAREN; //エラー番号をセット
+      break; //ここで打ち切る
+    }
+    cip += 2; //中間コードポインタを「()」の次へ進める
+    value = iirget();
     break;
 #endif
 
@@ -1564,6 +1597,18 @@ void iiois() {
 }
 #endif
 
+#ifdef _IR_
+void iirput() {
+
+    short value;
+    value = iexp();
+    if(err) return;
+
+    ir_put(value);
+
+}
+#endif
+
 #ifdef _IOEXP_
 
 void igkopt() {
@@ -1882,6 +1927,12 @@ unsigned char* iexe() {
     case I_IOIS: //中間コードがIOISの場合
       cip++;
       iiois();
+      break;
+#endif
+#ifdef _IR_
+    case I_IRPUT: // 中間コードがIRPUTの場合
+      cip++;
+      iirput();
       break;
 #endif
 #ifdef _IOEXP_
