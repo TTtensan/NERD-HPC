@@ -6,11 +6,6 @@
 #include "pin.h"
 #include "ir.h"
 
-uint32_t ir_clock_freq;
-uint32_t ir_pwm_freq;
-uint32_t ir_wrap;
-uint ir_slice_num;
-
 void pin_init(){
 
     // IO expander
@@ -70,15 +65,15 @@ void pin_init(){
     gpio_put(PIN_LCD_RS, 0);
 
     // IR
+    //gpio_init(PIN_IR_TX);
+    //gpio_set_dir(PIN_IR_TX, GPIO_OUT);
+    //gpio_put(PIN_IR_TX, 1);
+
     gpio_set_function(PIN_IR_TX, GPIO_FUNC_PWM);
-    ir_clock_freq = 125000000;
-    ir_pwm_freq = 38000;
-    ir_wrap = ir_clock_freq / ir_pwm_freq - 1; // TOP値
-    ir_slice_num = pwm_gpio_to_slice_num(PIN_IR_TX);
-    pwm_set_wrap(ir_slice_num, ir_wrap);
-    pwm_set_chan_level(ir_slice_num, pwm_gpio_to_channel(PIN_IR_TX), ir_wrap / 2); // デューティ50%
-    pwm_set_enabled(ir_slice_num, true);
-    pwm_set_chan_level(ir_slice_num, pwm_gpio_to_channel(PIN_IR_TX), ir_wrap);
+    uint slice_num = pwm_gpio_to_slice_num(PIN_IR_TX);
+    pwm_set_wrap(slice_num, 3288);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, 1644);
+    pwm_set_enabled(slice_num, false);
 
     gpio_init(PIN_IR_RX);
     gpio_set_dir(PIN_IR_RX, GPIO_IN);

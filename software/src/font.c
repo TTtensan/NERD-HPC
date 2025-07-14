@@ -5,7 +5,6 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include "font.h"
 
 uint8_t font[FONT_NUM][5];
@@ -1394,28 +1393,12 @@ const uint8_t font_copy[FONT_NUM][5] =
 
 };
 
-void font_init() {
+void font_init(){
 
   for(int i=0; i<FONT_NUM; i++){
     for(int j=0; j<5; j++){
       font[i][j] = font_copy[i][j];
     }
-  }
-
-}
-
-// data(5byteの16進数の並び)をfontデータにセットする
-void font_setfont(uint8_t c_code, char* data) {
-
-  char data_trim[3];
-  data_trim[2] = '\0';
-  for(int i=0; i<5; i++){
-    data_trim[0] = data[i*2];
-    printf("data_trim[0]:%c\n",data_trim[0]);
-    data_trim[1] = data[i*2+1];
-    printf("data_trim[1]:%c\n",data_trim[1]);
-    font[c_code][i] = (uint8_t)strtol(data_trim, NULL, 16);
-    printf("font[%u][%d]:%u\n",c_code,i,font[c_code][i]);
   }
 
 }

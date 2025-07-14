@@ -10,23 +10,19 @@
 #include "lcd.h"
 #include "f_util.h"
 #include "ff.h"
-#include "font.h"
 #include "diskio.h"
 #include "sd.hpp"
 #include "io.h"
-#include "ir.h"
 #include "ioexp.h"
 #include "speaker.h"
 #include "usb.h"
 #include "basic.hpp"
 
-#define _FONT_
 #define _SLEEP_
 #define _PROG_
 #define _LCD_
 #define _USB_
 #define _IO_
-#define _IR_
 #define _IOEXP_
 #define _SPEAKER_
 
@@ -42,7 +38,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.9.0"
+#define STR_VERSION "1.8.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -90,10 +86,6 @@ const char *kwtbl[] = {
   "-", "+", "*", "/", "%", "(", ")",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
-#ifdef _FONT_
-  "SETF",
-  "RESETF",
-#endif
 #ifdef _SLEEP_
   "SLEEPMS",
   "SLEEPUS",
@@ -129,10 +121,6 @@ const char *kwtbl[] = {
   "IOIS",
   "IOIR",
 #endif
-#ifdef _IR_
-  "IRPUT",
-  "IRGET",
-#endif
 #ifdef _IOEXP_
   "GKOPT",
   "GETKEY",
@@ -157,10 +145,6 @@ enum {
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
-#ifdef _FONT_
-  I_SETF,
-  I_RESETF,
-#endif
 #ifdef _SLEEP_
   I_SLEEPMS,
   I_SLEEPUS,
@@ -196,10 +180,6 @@ enum {
   I_IOIS,
   I_IOIR,
 #endif
-#ifdef _IR_
-  I_IRPUT,
-  I_IRGET,
-#endif
 #ifdef _IOEXP_
   I_GKOPT,
   I_GETKEY,
@@ -219,9 +199,6 @@ const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
-#ifdef _FONT_
-  I_RESETF,
-#endif
 #ifdef _LCD_
   I_CLS,
   I_GCLS,
@@ -233,9 +210,6 @@ const unsigned char i_nsa[] = {
   I_IOIIM,
   I_IOIIS,
   I_IOIR,
-#endif
-#ifdef _IR_
-  I_IRGET,
 #endif
 #ifdef _IOEXP_
   I_GETKEY,
@@ -804,13 +778,6 @@ short iioir() {
 }
 #endif
 
-#ifdef _IR_
-short iirget() {
-    short status = ir_get();
-    return status;
-}
-#endif
-
 #ifdef _IOEXP_
 
 short igetkey(short index) {
@@ -903,19 +870,6 @@ short ivalue() {
     }
     cip += 2; //中間コードポインタを「()」の次へ進める
     value = iioir();
-    break;
-#endif
-
-#ifdef _IR_
-  case I_IRGET: //関数IRGETの場合
-    cip++;
-    //もし後ろに「()」がなかったら
-    if ((*cip != I_OPEN) || (*(cip + 1) != I_CLOSE)) {
-      err = ERR_PAREN; //エラー番号をセット
-      break; //ここで打ち切る
-    }
-    cip += 2; //中間コードポインタを「()」の次へ進める
-    value = iirget();
     break;
 #endif
 
@@ -1273,50 +1227,6 @@ void ilet() {
   }
 }
 
-#ifdef _FONT_
-void isetf() {
-
-  short c_code;
-  char buf[256];
-  unsigned char len;
-  unsigned char i;
-
-  c_code = iexp();
-  if(err) return;
-  cip++;
-
-  if (*cip != I_STR) {
-    err = ERR_SYNTAX;
-    return;
-  }
-  cip++;
-
-  len = *cip;
-  if (len == 0) {
-    err = ERR_SYNTAX;
-    return;
-  }
-  cip++;
-
-  for (i = 0; i < len; i++) buf[i] = *cip++;
-  buf[i] = 0;
-
-  if (*cip != I_EOL) {
-    err = ERR_SYNTAX;
-    return;
-  }
-
-  font_setfont(c_code, buf);
-
-}
-
-void iresetf() {
-
-  font_init();
-
-}
-#endif
-
 #ifdef _SLEEP_
 void isleepms() {
 
@@ -1654,18 +1564,6 @@ void iiois() {
 }
 #endif
 
-#ifdef _IR_
-void iirput() {
-
-    short value;
-    value = iexp();
-    if(err) return;
-
-    ir_put(value);
-
-}
-#endif
-
 #ifdef _IOEXP_
 
 void igkopt() {
@@ -1890,16 +1788,6 @@ unsigned char* iexe() {
       cip++; //中間コードポインタを次へ進める
       iinput(); //INPUT文を実行
       break; //打ち切る
-#ifdef _FONT_
-    case I_SETF:
-        cip++;
-        isetf();
-        break;
-    case I_RESETF:
-        cip++;
-        iresetf();
-        break;
-#endif
 #ifdef _SLEEP_
     case I_SLEEPMS:
         cip++;
@@ -1994,12 +1882,6 @@ unsigned char* iexe() {
     case I_IOIS: //中間コードがIOISの場合
       cip++;
       iiois();
-      break;
-#endif
-#ifdef _IR_
-    case I_IRPUT: // 中間コードがIRPUTの場合
-      cip++;
-      iirput();
       break;
 #endif
 #ifdef _IOEXP_
