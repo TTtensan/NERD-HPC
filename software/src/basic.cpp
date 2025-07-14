@@ -10,6 +10,7 @@
 #include "lcd.h"
 #include "f_util.h"
 #include "ff.h"
+#include "font.h"
 #include "diskio.h"
 #include "sd.hpp"
 #include "io.h"
@@ -19,6 +20,7 @@
 #include "usb.h"
 #include "basic.hpp"
 
+#define _FONT_
 #define _SLEEP_
 #define _PROG_
 #define _LCD_
@@ -88,6 +90,10 @@ const char *kwtbl[] = {
   "-", "+", "*", "/", "%", "(", ")",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
+#ifdef _FONT_
+  "SETF",
+  "RESETF",
+#endif
 #ifdef _SLEEP_
   "SLEEPMS",
   "SLEEPUS",
@@ -151,6 +157,10 @@ enum {
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
+#ifdef _FONT_
+  I_SETF,
+  I_RESETF,
+#endif
 #ifdef _SLEEP_
   I_SLEEPMS,
   I_SLEEPUS,
@@ -209,6 +219,9 @@ const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
+#ifdef _FONT_
+  I_RESETF,
+#endif
 #ifdef _LCD_
   I_CLS,
   I_GCLS,
@@ -1260,6 +1273,50 @@ void ilet() {
   }
 }
 
+#ifdef _FONT_
+void isetf() {
+
+  short c_code;
+  char buf[256];
+  unsigned char len;
+  unsigned char i;
+
+  c_code = iexp();
+  if(err) return;
+  cip++;
+
+  if (*cip != I_STR) {
+    err = ERR_SYNTAX;
+    return;
+  }
+  cip++;
+
+  len = *cip;
+  if (len == 0) {
+    err = ERR_SYNTAX;
+    return;
+  }
+  cip++;
+
+  for (i = 0; i < len; i++) buf[i] = *cip++;
+  buf[i] = 0;
+
+  if (*cip != I_EOL) {
+    err = ERR_SYNTAX;
+    return;
+  }
+
+  font_setfont(c_code, buf);
+
+}
+
+void iresetf() {
+
+  font_init();
+
+}
+#endif
+
 #ifdef _SLEEP_
 void isleepms() {
 
@@ -1833,6 +1890,16 @@ unsigned char* iexe() {
       cip++; //中間コードポインタを次へ進める
       iinput(); //INPUT文を実行
       break; //打ち切る
+#ifdef _FONT_
+    case I_SETF:
+        cip++;
+        isetf();
+        break;
+    case I_RESETF:
+        cip++;
+        iresetf();
+        break;
+#endif
 #ifdef _SLEEP_
     case I_SLEEPMS:
         cip++;
