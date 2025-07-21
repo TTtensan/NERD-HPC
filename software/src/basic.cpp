@@ -99,7 +99,7 @@ const char *kwtbl[] = {
   "SLEEPUS",
 #endif
 #ifdef _PROG_
-  "SAVE", "LOAD",
+  "SAVE", "LOAD", "DELETE",
 #endif
 #ifdef _LCD_
   "CLS",
@@ -166,7 +166,7 @@ enum {
   I_SLEEPUS,
 #endif
 #ifdef _PROG_
-  I_SAVE, I_LOAD,
+  I_SAVE, I_LOAD, I_DELETE,
 #endif
 #ifdef _LCD_
   I_CLS,
@@ -1913,6 +1913,7 @@ unsigned char* iexe() {
 #ifdef _PROG_
     case I_SAVE: //中間コードがSAVEの場合
     case I_LOAD: //中間コードがLOADの場合
+    case I_DELETE: //中間コードがDELETEの場合
 #endif
 #ifdef _LCD_
     case I_CLS: //中間コードがCLSの場合
@@ -2428,6 +2429,62 @@ void iload() {
 }
 #endif
 
+//DELETE command handler
+void idelete() {
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        err = ERR_SDMOUNT;
+        return;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        err = ERR_SDCHDRV;
+        return;
+    }
+
+    if (*cip != I_STR) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    len = *cip;
+    if (len == 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    for (i = 0; i < len; i++) buf[i] = *cip++;
+    buf[i] = 0;
+
+    if (*cip != I_EOL) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    fr = f_unlink(buf);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        err = ERR_FNOPEN;
+        return;
+    }
+
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+}
+
 //Command precessor
 void icom() {
   cip = ibuf; //中間コードポインタを中間コードバッファの先頭に設定
@@ -2465,6 +2522,10 @@ void icom() {
   case I_LOAD:
     cip++;
     iload();
+    break;
+  case I_DELETE:
+    cip++;
+    idelete();
     break;
 #endif
 
