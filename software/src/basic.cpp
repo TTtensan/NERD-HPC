@@ -112,6 +112,7 @@ const char *kwtbl[] = {
   "GPLAYNM",
   "GPUTC",
   "CHR",
+  "LOCATE",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -180,6 +181,7 @@ enum {
   I_GPLAYNM,
   I_GPUTC,
   I_CHR,
+  I_LOCATE,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -1574,6 +1576,19 @@ void igputc() {
     else lcd_gprint_c_free(x_pos, y_pos, c_code, white, transparent);
 
 }
+
+void ilocate() {
+
+    short x_pos, y_pos;
+    x_pos = iexp();
+    if(err) return;
+    cip++;
+    y_pos = iexp();
+    if(err) return;
+
+    lcd_set_cursor(x_pos, y_pos);
+
+}
 #endif
 
 #ifdef _USB_
@@ -2011,6 +2026,10 @@ unsigned char* iexe() {
     case I_GPUTC: //中間コードがGPUTCの場合
       cip++;
       igputc();
+      break;
+    case I_LOCATE: //中間コードがLOCATEの場合
+      cip++;
+      ilocate();
       break;
 #endif
 #ifdef _USB_
