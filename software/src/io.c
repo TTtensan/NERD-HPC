@@ -30,8 +30,8 @@ void io_button_callback(uint gpio, uint32_t events){
 }
 
 void io_init(){
-    gpio_set_irq_enabled_with_callback(PIN_SW, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &io_button_callback);
-    gpio_pull_up(PIN_SW);
+    //gpio_set_irq_enabled_with_callback(PIN_SW, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &io_button_callback);
+    //gpio_pull_up(PIN_SW);
     io_i2c_master_init();
 }
 

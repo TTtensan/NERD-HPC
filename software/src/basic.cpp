@@ -19,6 +19,7 @@
 #include "speaker.h"
 #include "usb.h"
 #include "basic.hpp"
+#include "pin.h"
 
 #define _FONT_
 #define _SLEEP_
@@ -35,14 +36,14 @@
 #define SIZE_LINE 64 //Command line buffer length + NULL
 #define SIZE_IBUF 64 //i-code conversion buffer size
 #define SIZE_LIST 32768 //List buffer size
-#define SIZE_ARRY 32 //Array area size
+#define SIZE_ARRY 64 //Array area size
 #define SIZE_GSTK 20 //GOSUB stack size(2/nest)
 #define SIZE_LSTK 50 //FOR stack size(5/nest)
 
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.9.0"
+#define STR_VERSION "1.10.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -99,7 +100,7 @@ const char *kwtbl[] = {
   "SLEEPUS",
 #endif
 #ifdef _PROG_
-  "SAVE", "LOAD",
+  "SAVE", "LOAD", "DELETE",
 #endif
 #ifdef _LCD_
   "CLS",
@@ -111,6 +112,8 @@ const char *kwtbl[] = {
   "GCIRCLE",
   "GPLAYNM",
   "GPUTC",
+  "CHR",
+  "LOCATE",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -166,7 +169,7 @@ enum {
   I_SLEEPUS,
 #endif
 #ifdef _PROG_
-  I_SAVE, I_LOAD,
+  I_SAVE, I_LOAD, I_DELETE,
 #endif
 #ifdef _LCD_
   I_CLS,
@@ -178,6 +181,8 @@ enum {
   I_GCIRCLE,
   I_GPLAYNM,
   I_GPUTC,
+  I_CHR,
+  I_LOCATE,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -763,6 +768,31 @@ void putlist(unsigned char* ip) {
   }
 }
 
+#ifdef _LCD_
+void check_paren_open() {
+  if (*cip != I_OPEN)  err = ERR_PAREN;
+  else cip++;
+}
+
+void check_paren_close() {
+  if (*cip != I_CLOSE)  err = ERR_PAREN;
+  else cip++;
+}
+
+// 複数の引数がある際のgetparam
+short getarg() {
+
+  short value; //値
+
+  value = iexp(); //式を計算
+  if (err) //もしエラーが生じたら
+    return 0; //終了
+
+  return value; //値を持ち帰る
+
+}
+#endif
+
 // Get argument in parenthesis
 short getparam() {
   short value; //値
@@ -1087,6 +1117,30 @@ short iexp() {
   } //中間コードで分岐の末尾
 }
 
+#ifdef _LCD_
+void ichr() {
+
+  short value;
+
+  check_paren_open();
+  if (err) return;
+
+  while(true) {
+    value = getarg();
+    if (err) return;
+    c_putch(value);
+    if (*cip == I_COMMA) {
+      cip++;
+      continue;
+    }
+    break;
+  }
+
+  check_paren_close();
+  if (err) return;
+}
+#endif
+
 // PRINT handler
 void iprint() {
   short value; //値
@@ -1110,6 +1164,15 @@ void iprint() {
       if (err) //もしエラーが生じたら
         return; //終了
       break; //打ち切る
+
+#ifdef _LCD_
+    case I_CHR: //CHR()の場合
+      cip++; //中間コードポインタを次へ進める
+      ichr();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
+#endif
 
     default: //以上のいずれにも該当しなかった場合（式とみなす）
       value = iexp(); //値を取得
@@ -1514,6 +1577,19 @@ void igputc() {
     else lcd_gprint_c_free(x_pos, y_pos, c_code, white, transparent);
 
 }
+
+void ilocate() {
+
+    short x_pos, y_pos;
+    x_pos = iexp();
+    if(err) return;
+    cip++;
+    y_pos = iexp();
+    if(err) return;
+
+    lcd_set_cursor(x_pos, y_pos);
+
+}
 #endif
 
 #ifdef _USB_
@@ -1913,6 +1989,7 @@ unsigned char* iexe() {
 #ifdef _PROG_
     case I_SAVE: //中間コードがSAVEの場合
     case I_LOAD: //中間コードがLOADの場合
+    case I_DELETE: //中間コードがDELETEの場合
 #endif
 #ifdef _LCD_
     case I_CLS: //中間コードがCLSの場合
@@ -1950,6 +2027,10 @@ unsigned char* iexe() {
     case I_GPUTC: //中間コードがGPUTCの場合
       cip++;
       igputc();
+      break;
+    case I_LOCATE: //中間コードがLOCATEの場合
+      cip++;
+      ilocate();
       break;
 #endif
 #ifdef _USB_
@@ -2426,7 +2507,137 @@ void iload() {
     pSD->m_Status |= STA_NOINIT; // in case medium is removed
     sd_card_detect(pSD);
 }
+
+bool iload_autorun() {
+
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        return 1;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        return 1;
+    }
+
+//    if (*cip != I_STR) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+//    cip++;
+//
+//    len = *cip;
+//    if (len == 0) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+//    cip++;
+//
+//    for (i = 0; i < len; i++) buf[i] = *cip++;
+    sprintf(buf, "AUTORUN.TXT");
+    //buf[i] = 0;
+
+//    if (*cip != I_EOL) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+
+    fr = f_open(&fp, buf, FA_OPEN_EXISTING | FA_READ);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        //err = ERR_FNFOUND;
+        return 1;
+    }
+
+    inew();
+
+    while (f_gets(buf, SIZE_LINE, &fp)) {
+        for (i = 0; c_isprint(buf[i]); i++) lbuf[i] = buf[i];
+        lbuf[i] = 0;
+        len = toktoi();
+        if (err) break;
+        if (*ibuf != I_NUM) {
+            err = ERR_SYNTAX;
+            break;
+        }
+        *ibuf = len;
+        inslist();
+        if (err) break;
+    }
+    f_close(&fp);
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+
+    return 0;
+
+}
 #endif
+
+//DELETE command handler
+void idelete() {
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        err = ERR_SDMOUNT;
+        return;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        err = ERR_SDCHDRV;
+        return;
+    }
+
+    if (*cip != I_STR) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    len = *cip;
+    if (len == 0) {
+        err = ERR_SYNTAX;
+        return;
+    }
+    cip++;
+
+    for (i = 0; i < len; i++) buf[i] = *cip++;
+    buf[i] = 0;
+
+    if (*cip != I_EOL) {
+        err = ERR_SYNTAX;
+        return;
+    }
+
+    fr = f_unlink(buf);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        err = ERR_FNOPEN;
+        return;
+    }
+
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+}
 
 //Command precessor
 void icom() {
@@ -2466,6 +2677,10 @@ void icom() {
     cip++;
     iload();
     break;
+  case I_DELETE:
+    cip++;
+    idelete();
+    break;
 #endif
 
   default: //どれにも該当しない場合
@@ -2501,6 +2716,13 @@ void error() {
   err = 0; //エラー番号をクリア
 }
 
+// AUTORUN.TXTが存在していれば実行する
+void autorun() {
+
+  if(!iload_autorun()) irun();
+
+}
+
 /*
   TOYOSHIKI Tiny BASIC
   The BASIC entry point
@@ -2521,6 +2743,10 @@ void basic() {
   c_puts(STR_VERSION);
   newline(); //改行
   error(); //「OK」またはエラーメッセージを表示してエラー番号をクリア
+
+  // SWが押されていなければAUTORUN.TXTを実行する
+  if(gpio_get(PIN_SW)) autorun();
+  if (err) error();
 
   //端末から1行を入力して実行
   while (1) { //無限ループ
