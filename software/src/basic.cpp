@@ -19,6 +19,7 @@
 #include "speaker.h"
 #include "usb.h"
 #include "basic.hpp"
+#include "pin.h"
 
 #define _FONT_
 #define _SLEEP_
@@ -2506,6 +2507,80 @@ void iload() {
     pSD->m_Status |= STA_NOINIT; // in case medium is removed
     sd_card_detect(pSD);
 }
+
+bool iload_autorun() {
+
+    FIL fp;
+    char buf[256];
+    unsigned char len;
+    unsigned char i;
+
+    sd_card_t *pSD = sd_get_by_num(0);
+    FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+    if (FR_OK != fr) {
+        return 1;
+    }
+    fr = f_chdrive(pSD->pcName);
+    if (FR_OK != fr) {
+        return 1;
+    }
+
+//    if (*cip != I_STR) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+//    cip++;
+//
+//    len = *cip;
+//    if (len == 0) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+//    cip++;
+//
+//    for (i = 0; i < len; i++) buf[i] = *cip++;
+    sprintf(buf, "AUTORUN.TXT");
+    //buf[i] = 0;
+
+//    if (*cip != I_EOL) {
+//        err = ERR_SYNTAX;
+//        return;
+//    }
+
+    fr = f_open(&fp, buf, FA_OPEN_EXISTING | FA_READ);
+    if (FR_OK != fr && FR_EXIST != fr) {
+        //err = ERR_FNFOUND;
+        return 1;
+    }
+
+    inew();
+
+    while (f_gets(buf, SIZE_LINE, &fp)) {
+        for (i = 0; c_isprint(buf[i]); i++) lbuf[i] = buf[i];
+        lbuf[i] = 0;
+        len = toktoi();
+        if (err) break;
+        if (*ibuf != I_NUM) {
+            err = ERR_SYNTAX;
+            break;
+        }
+        *ibuf = len;
+        inslist();
+        if (err) break;
+    }
+    f_close(&fp);
+    fr = f_unmount(pSD->pcName);
+    if (FR_OK == fr) {
+        pSD->mounted = false;
+    } else {
+        printf("f_unmount error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+    pSD->m_Status |= STA_NOINIT; // in case medium is removed
+    sd_card_detect(pSD);
+
+    return 0;
+
+}
 #endif
 
 //DELETE command handler
@@ -2641,6 +2716,13 @@ void error() {
   err = 0; //エラー番号をクリア
 }
 
+// AUTORUN.TXTが存在していれば実行する
+void autorun() {
+
+  if(!iload_autorun()) irun();
+
+}
+
 /*
   TOYOSHIKI Tiny BASIC
   The BASIC entry point
@@ -2661,6 +2743,10 @@ void basic() {
   c_puts(STR_VERSION);
   newline(); //改行
   error(); //「OK」またはエラーメッセージを表示してエラー番号をクリア
+
+  // SWが押されていなければAUTORUN.TXTを実行する
+  if(gpio_get(PIN_SW)) autorun();
+  if (err) error();
 
   //端末から1行を入力して実行
   while (1) { //無限ループ
