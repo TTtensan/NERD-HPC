@@ -111,6 +111,7 @@ const char *kwtbl[] = {
   "GCIRCLE",
   "GPLAYNM",
   "GPUTC",
+  "CHR",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -178,6 +179,7 @@ enum {
   I_GCIRCLE,
   I_GPLAYNM,
   I_GPUTC,
+  I_CHR,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -763,6 +765,31 @@ void putlist(unsigned char* ip) {
   }
 }
 
+#ifdef _LCD_
+void check_paren_open() {
+  if (*cip != I_OPEN)  err = ERR_PAREN;
+  else cip++;
+}
+
+void check_paren_close() {
+  if (*cip != I_CLOSE)  err = ERR_PAREN;
+  else cip++;
+}
+
+// 複数の引数がある際のgetparam
+short getarg() {
+
+  short value; //値
+
+  value = iexp(); //式を計算
+  if (err) //もしエラーが生じたら
+    return 0; //終了
+
+  return value; //値を持ち帰る
+
+}
+#endif
+
 // Get argument in parenthesis
 short getparam() {
   short value; //値
@@ -1087,6 +1114,30 @@ short iexp() {
   } //中間コードで分岐の末尾
 }
 
+#ifdef _LCD_
+void ichr() {
+
+  short value;
+
+  check_paren_open();
+  if (err) return;
+
+  while(true) {
+    value = getarg();
+    if (err) return;
+    c_putch(value);
+    if (*cip == I_COMMA) {
+      cip++;
+      continue;
+    }
+    break;
+  }
+
+  check_paren_close();
+  if (err) return;
+}
+#endif
+
 // PRINT handler
 void iprint() {
   short value; //値
@@ -1110,6 +1161,15 @@ void iprint() {
       if (err) //もしエラーが生じたら
         return; //終了
       break; //打ち切る
+
+#ifdef _LCD_
+    case I_CHR: //CHR()の場合
+      cip++; //中間コードポインタを次へ進める
+      ichr();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
+#endif
 
     default: //以上のいずれにも該当しなかった場合（式とみなす）
       value = iexp(); //値を取得
