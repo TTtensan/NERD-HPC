@@ -43,7 +43,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.10.0"
+#define STR_VERSION "1.10.0d"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -89,6 +89,8 @@ const char *kwtbl[] = {
   "INPUT", "PRINT", "LET",
   ",", ";",
   "-", "+", "*", "/", "%", "(", ")",
+  "$", "`", "<<", ">>",
+  "&", "|", "^", "~",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
 #ifdef _FONT_
@@ -158,6 +160,8 @@ enum {
   I_INPUT, I_PRINT, I_LET,
   I_COMMA, I_SEMI,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
 #ifdef _FONT_
@@ -223,6 +227,8 @@ enum {
 const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
 #ifdef _FONT_
   I_RESETF,
@@ -254,6 +260,8 @@ const unsigned char i_nsa[] = {
 // 前が定数か変数のとき前の空白をなくす中間コード
 const unsigned char i_nsb[] = {
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_COMMA, I_SEMI, I_EOL
 };
@@ -488,6 +496,25 @@ short getnum() {
   return value; //値を持ち帰る
 }
 
+bool is_hexchar(char c) {
+  return (c >= '0' && c <= '9') ||
+    (c >= 'A' && c <= 'F') ||
+    (c >= 'a' && c <= 'f');
+}
+
+// 16進数の1文字を10進数の数値に変換
+uint16_t hex2value(char hex) {
+    if (hex >= '0' && hex <= '9') {
+        return hex - '0'; // '0'〜'9' -> 0〜9
+    } else if (hex >= 'A' && hex <= 'F') {
+        return hex - 'A' + 10; // 'A'〜'F' -> 10〜15
+    } else if (hex >= 'a' && hex <= 'f') {
+        return hex - 'a' + 10; // 'a'〜'f' -> 10〜15
+    } else {
+        return -1; // 無効な文字
+    }
+}
+
 // Convert token to i-code
 // Return byte length or 0
 unsigned char toktoi() {
@@ -499,6 +526,11 @@ unsigned char toktoi() {
   char c; //文字列の括りに使われている文字（「"」または「'」）
   short value; //定数
   short tmp; //変換過程の定数
+
+  uint16_t hex;
+  uint16_t hcnt;
+  uint16_t bin;
+  uint16_t bcnt;
 
   while (*s) { //文字列1行分の終端まで繰り返す
     while (c_isspace(*s)) s++; //空白を読み飛ばす
@@ -529,6 +561,55 @@ unsigned char toktoi() {
       } //キーワードと単語が一致した場合の処理の末尾
 
     } //キーワードテーブルで変換を試みるの末尾
+
+    // 参考[https://github.com/Tamakichi/ttbasic_arduino_stm32/blob/master/ttbasic/basic.cpp]
+    // 16進数の変換を試みる
+    if (i == I_HEX) {
+      if (is_hexchar(*s)) {
+        hex = 0;
+        hcnt = 0;
+        do {
+          hex = (hex<<4) + hex2value(*s++);
+          hcnt++;
+        } while (is_hexchar(*s));
+        if (hcnt > 4) {
+          err = ERR_VOF;
+          return 0;
+        }
+        if (len >= SIZE_IBUF - 3) {
+          err = ERR_IBUFOF;
+          return 0;
+        }
+        len--; // $を置き換えるために格納位置を移動
+        ibuf[len++] = I_NUM;
+        ibuf[len++] = hex & 255;
+        ibuf[len++] = hex >> 8;
+      }
+    }
+
+    // 2進数の変換を試みる
+    if (i == I_BIN) {
+      if ( *s == '0'|| *s == '1' ) {
+        bin = 0;
+        bcnt = 0;
+        do {
+          bin = (bin<<1) + (*s++)-'0';
+          bcnt++;
+        } while (*s == '0'|| *s == '1');
+        if (bcnt > 16) {
+          err = ERR_VOF;
+          return 0;
+        }
+        if (len >= SIZE_IBUF - 3) {
+          err = ERR_IBUFOF;
+          return 0;
+        }
+        len--;    // `を置き換えるために格納位置を移動
+        ibuf[len++] = I_NUM;
+        ibuf[len++] = bin & 255;
+        ibuf[len++] = bin >> 8;
+      }      
+    }
 
     //コメントへの変換を試みる
     if(i == I_REM) { //もし中間コードがI_REMなら
@@ -876,6 +957,11 @@ short ivalue() {
     value = 0 - ivalue(); //値を取得して負の値に変換
     break; //ここで打ち切る
 
+  case I_BITFLIP: // 「~」の場合
+    cip++; //中間コードポインタを次へ進める
+    value = ~((uint16_t)ivalue()); //値を取得してビット反転
+    break;
+
   //変数の値の取得
   case I_VAR: //変数の場合
     cip++; //中間コードポインタを次へ進める
@@ -1035,6 +1121,35 @@ short imul() {
     }
     value %= tmp; //割り算を実行
     break; 
+
+  case I_LSHIFT: // シフト演算 "<<" の場合
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)<<tmp;
+    break;
+
+  case I_RSHIFT: // シフト演算 ">>" の場合
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)>>tmp;
+    break; 
+
+  case I_AND:  // 論理積(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)&((uint16_t)tmp);
+    break; //ここで打ち切る
+
+  case I_OR:   //論理和(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)|((uint16_t)tmp);
+    break; 
+
+  case I_XOR: //排他的論理和(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)^((uint16_t)tmp);
 
   default: //以上のいずれにも該当しなかった場合
     return value; //値を持ち帰る
