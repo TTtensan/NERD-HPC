@@ -43,7 +43,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.10.0d"
+#define STR_VERSION "1.11.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -220,7 +220,7 @@ enum {
   I_STPSND,
 #endif
   I_LIST, I_ALL, I_RUN, I_NEW,
-  I_NUM, I_VAR, I_STR,
+  I_NUM, I_HEXNUM, I_BINNUM, I_VAR, I_STR,
   I_EOL
 };
 
@@ -584,7 +584,7 @@ unsigned char toktoi() {
           return 0;
         }
         len--; // $を置き換えるために格納位置を移動
-        ibuf[len++] = I_NUM;
+        ibuf[len++] = I_HEXNUM;
         ibuf[len++] = hex & 255;
         ibuf[len++] = hex >> 8;
       }
@@ -608,7 +608,7 @@ unsigned char toktoi() {
           return 0;
         }
         len--;    // `を置き換えるために格納位置を移動
-        ibuf[len++] = I_NUM;
+        ibuf[len++] = I_BINNUM;
         ibuf[len++] = bin & 255;
         ibuf[len++] = bin >> 8;
       }      
@@ -779,6 +779,48 @@ void inslist() {
     *p1++ = *p2++; //転送
 }
 
+// 16進数の出力
+void putHexnum(short value, uint8_t d) {
+
+  uint16_t hex = (uint16_t)value;
+  uint16_t h;
+  uint16_t dig;
+
+  if (hex >= 0x1000) dig = 4;
+  else if (hex >= 0x100) dig = 3;
+  else if (hex >= 0x10) dig = 2;
+  else dig = 1;
+
+  if (d != 0 && d > dig) dig = d;
+
+  for (uint8_t i = 0; i < 4; i++) {
+    h = ( hex >> (12 - i * 4) ) & 0x0f;
+    lbuf[i] = h <= 9 ? h + '0': h + 'A' - 10;
+  }
+  lbuf[4] = 0;
+  c_puts(&lbuf[4-dig]);
+}
+
+// 2進数の出力
+void putBinnum(int16_t value, uint8_t d) {
+  uint16_t bin = (uint16_t)value;
+  uint16_t dig = 0;
+
+  for (uint8_t i=0; i < 16; i++) {
+    if ( (0x8000>>i) & bin ) {
+      dig = 15 - i;
+      break;
+    }
+  }
+  dig++;
+  
+  if (d > dig) dig = d;
+
+  for (int8_t i=dig-1; i>=0; i--)
+    c_putch((bin & (1<<i)) ? '1':'0');
+
+}
+
 //Listing 1 line of i-code
 void putlist(unsigned char* ip) {
   unsigned char i; //ループカウンタ
@@ -812,6 +854,29 @@ void putlist(unsigned char* ip) {
         c_putch(' '); //空白を表示
     }
     else
+
+    //16進数定数の処理
+    if (*ip == I_HEXNUM) { //もし16進定数なら
+      ip++; //ポインタを値へ進める
+      c_putch('$'); //空白を表示
+      putHexnum(*ip | *(ip + 1) << 8, 2); //値を取得して表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        c_putch(' '); //空白を表示
+    }
+    else
+
+    //2進数定数の処理
+    if (*ip == I_BINNUM) { //もし2進定数なら
+      ip++; //ポインタを値へ進める
+      c_putch('`'); //"`"を表示
+      if (*(ip + 1)) putBinnum(*ip | *(ip + 1) << 8, 16); //値を取得して16桁で表示
+      else putBinnum(*ip, 8);  //値を取得して8桁で表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        c_putch(' '); //空白を表示
+    }
+    else 
 
     //変数の処理
     if (*ip == I_VAR) { //もし定数なら
@@ -973,6 +1038,8 @@ short ivalue() {
 
   //定数の取得
   case I_NUM: //定数の場合
+  case I_HEXNUM: // 16進数定数
+  case I_BINNUM: // 2進数定数
     cip++; //中間コードポインタを次へ進める
     value = *cip | *(cip + 1) << 8; //定数を取得
     cip += 2; //中間コードポインタを定数の次へ進める
@@ -1298,6 +1365,44 @@ void ichr() {
 }
 #endif
 
+// 16進数文字出力
+void ihex() {
+  short value; // 値
+  short d = 0; // 桁数(0で桁数指定なし)
+
+  check_paren_open();
+  if (err) return;
+  value = getparam();
+  if(err) return;
+  if (*cip == I_COMMA) {
+    cip++;
+    d = getparam();
+    if(err) return;
+  }
+  check_paren_close();
+  if (err) return;
+  putHexnum(value, d);    
+}
+
+// 2進数出力
+void ibin() {
+  int16_t value; // 値
+  int16_t d = 0; // 桁数(0で桁数指定なし)
+
+  check_paren_open();
+  if (err) return;
+  value = getparam();
+  if(err) return;
+  if (*cip == I_COMMA) {
+    cip++;
+    d = getparam();
+    if(err) return;
+  }
+  check_paren_close();
+  if (err) return;
+  putBinnum(value, d);    
+}
+
 // PRINT handler
 void iprint() {
   short value; //値
@@ -1321,6 +1426,19 @@ void iprint() {
       if (err) //もしエラーが生じたら
         return; //終了
       break; //打ち切る
+
+    case I_HEX:
+      cip++; //中間コードポインタを次へ進める
+      ihex();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
+    case I_BIN:
+      cip++; //中間コードポインタを次へ進める
+      ibin();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
 
 #ifdef _LCD_
     case I_CHR: //CHR()の場合
@@ -2451,6 +2569,49 @@ void inew(void) {
   clp = listbuf; //行ポインタをプログラム保存領域の先頭に設定
 }
 
+// 16進数のファイル出力
+void fputHexnum(short value, uint8_t d, FIL *fp) {
+
+  uint16_t hex = (uint16_t)value;
+  uint16_t h;
+  uint16_t dig;
+
+  if (hex >= 0x1000) dig = 4;
+  else if (hex >= 0x100) dig = 3;
+  else if (hex >= 0x10) dig = 2;
+  else dig = 1;
+
+  if (d != 0 && d > dig) dig = d;
+
+  for (uint8_t i = 0; i < 4; i++) {
+    h = ( hex >> (12 - i * 4) ) & 0x0f;
+    lbuf[i] = h <= 9 ? h + '0': h + 'A' - 10;
+  }
+  lbuf[4] = 0;
+  f_printf(fp, &lbuf[4-dig]);
+}
+
+// 2進数のファイル出力
+void fputBinnum(int16_t value, uint8_t d, FIL *fp) {
+
+  uint16_t bin = (uint16_t)value;
+  uint16_t  dig = 0;
+
+  for (uint8_t i=0; i < 16; i++) {
+    if ( (0x8000>>i) & bin ) {
+      dig = 15 - i;
+      break;
+    }
+  }
+  dig++;
+  
+  if (d > dig) 
+    dig = d;
+
+  for (int8_t i=dig-1; i>=0; i--)
+    f_putc((bin & (1<<i)) ? '1':'0', fp);
+
+}
 
 #ifdef _PROG_
 //Listing 1 line of i-code to file
@@ -2482,6 +2643,31 @@ void fputlist(FIL *fp, unsigned char* ip) {
                 if (!nospaceb(*ip)) f_putc(' ', fp);
             }
             else
+
+    //16進定数の処理
+    if (*ip == I_HEXNUM) { //もし16進定数なら
+      ip++; //ポインタを値へ進める
+      f_putc('$', fp); //空白を表示
+      fputHexnum(*ip | *(ip + 1) << 8, 2, fp); //値を取得して表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        f_putc(' ', fp); //空白を表示
+    }
+    else
+
+    //2進定数の処理
+    if (*ip == I_BINNUM) { //もし2進定数なら
+      ip++; //ポインタを値へ進める
+      f_putc('`', fp); //"`"を表示
+      if (*(ip + 1))
+          fputBinnum(*ip | *(ip + 1) << 8, 16, fp); //値を取得して16桁で表示
+      else
+          fputBinnum(*ip, 8, fp);  //値を取得して8桁で表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        f_putc(' ', fp); //空白を表示
+    }
+    else 
 
                 // Case variable
                 if (*ip == I_VAR) {
