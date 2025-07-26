@@ -116,6 +116,7 @@ const char *kwtbl[] = {
   "GPUTC",
   "CHR",
   "LOCATE",
+  "SCR",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -187,6 +188,7 @@ enum {
   I_GPUTC,
   I_CHR,
   I_LOCATE,
+  I_SCR,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -237,6 +239,7 @@ const unsigned char i_nsa[] = {
   I_CLS,
   I_GCLS,
   I_VSYNC,
+  I_SCR,
 #endif
 #ifdef _IO_
   I_IOGET,
@@ -897,6 +900,36 @@ short getparam() {
   return value; //値を持ち帰る
 }
 
+#ifdef _LCD_
+short iscr() {
+
+  short x_pos, y_pos;
+  short value;
+
+  check_paren_open();
+  if (err) return -1;
+
+  x_pos = getarg();
+  if (err) return -1;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return -1;
+  }
+  cip++;
+
+  y_pos = getarg();
+  if (err) return -1;
+
+  check_paren_close();
+  if (err) return -1;
+
+  value = lcd_scr(x_pos, y_pos);
+  return value;
+
+}
+#endif
+
 #ifdef _IO_
 short iioget(short gpio) {
 
@@ -985,6 +1018,15 @@ short ivalue() {
     }
     value = arr[value]; //配列の値を取得
     break; //ここで打ち切る
+
+#ifdef _LCD_
+  case I_SCR: //関数SCRの場合
+    cip++;
+    value = iscr();
+      if (err) //もしエラーが生じたら
+        break; //ここで打ち切る
+    break;
+#endif
 
 #ifdef _IO_
   case I_IOGET: //関数IOGETの場合

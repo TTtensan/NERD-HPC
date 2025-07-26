@@ -55,6 +55,7 @@ int lcd_play_nbm(uint8_t x_pos, uint8_t y_pos, char* file_name, color cl, bool t
 void lcd_scroll(scroll_dir dir);
 void lcd_reverse_color(disp_status ds);
 void lcd_vsync();
+short lcd_scr(uint8_t x_pos, uint8_t y_pos);
 
 bool repeating_timer_callback(struct repeating_timer *t);
 void lcd_start_disp_vbuf_timer();
