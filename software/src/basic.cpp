@@ -43,7 +43,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.10.0"
+#define STR_VERSION "1.11.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -89,6 +89,8 @@ const char *kwtbl[] = {
   "INPUT", "PRINT", "LET",
   ",", ";",
   "-", "+", "*", "/", "%", "(", ")",
+  "$", "`", "<<", ">>",
+  "&", "|", "^", "~",
   ">=", "#", ">", "=", "<=", "<",
   "@", "RND", "ABS", "SIZE",
 #ifdef _FONT_
@@ -114,6 +116,7 @@ const char *kwtbl[] = {
   "GPUTC",
   "CHR",
   "LOCATE",
+  "SCR",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -158,6 +161,8 @@ enum {
   I_INPUT, I_PRINT, I_LET,
   I_COMMA, I_SEMI,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_ARRAY, I_RND, I_ABS, I_SIZE,
 #ifdef _FONT_
@@ -183,6 +188,7 @@ enum {
   I_GPUTC,
   I_CHR,
   I_LOCATE,
+  I_SCR,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -214,7 +220,7 @@ enum {
   I_STPSND,
 #endif
   I_LIST, I_ALL, I_RUN, I_NEW,
-  I_NUM, I_VAR, I_STR,
+  I_NUM, I_HEXNUM, I_BINNUM, I_VAR, I_STR,
   I_EOL
 };
 
@@ -223,6 +229,8 @@ enum {
 const unsigned char i_nsa[] = {
   I_RETURN, I_STOP, I_COMMA,
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
 #ifdef _FONT_
   I_RESETF,
@@ -231,6 +239,7 @@ const unsigned char i_nsa[] = {
   I_CLS,
   I_GCLS,
   I_VSYNC,
+  I_SCR,
 #endif
 #ifdef _IO_
   I_IOGET,
@@ -254,6 +263,8 @@ const unsigned char i_nsa[] = {
 // 前が定数か変数のとき前の空白をなくす中間コード
 const unsigned char i_nsb[] = {
   I_MINUS, I_PLUS, I_MUL, I_DIV, I_MOD, I_OPEN, I_CLOSE,
+  I_HEX, I_BIN, I_LSHIFT, I_RSHIFT,
+  I_AND, I_OR, I_XOR, I_BITFLIP,
   I_GTE, I_SHARP, I_GT, I_EQ, I_LTE, I_LT,
   I_COMMA, I_SEMI, I_EOL
 };
@@ -488,6 +499,25 @@ short getnum() {
   return value; //値を持ち帰る
 }
 
+bool is_hexchar(char c) {
+  return (c >= '0' && c <= '9') ||
+    (c >= 'A' && c <= 'F') ||
+    (c >= 'a' && c <= 'f');
+}
+
+// 16進数の1文字を10進数の数値に変換
+uint16_t hex2value(char hex) {
+    if (hex >= '0' && hex <= '9') {
+        return hex - '0'; // '0'〜'9' -> 0〜9
+    } else if (hex >= 'A' && hex <= 'F') {
+        return hex - 'A' + 10; // 'A'〜'F' -> 10〜15
+    } else if (hex >= 'a' && hex <= 'f') {
+        return hex - 'a' + 10; // 'a'〜'f' -> 10〜15
+    } else {
+        return -1; // 無効な文字
+    }
+}
+
 // Convert token to i-code
 // Return byte length or 0
 unsigned char toktoi() {
@@ -499,6 +529,11 @@ unsigned char toktoi() {
   char c; //文字列の括りに使われている文字（「"」または「'」）
   short value; //定数
   short tmp; //変換過程の定数
+
+  uint16_t hex;
+  uint16_t hcnt;
+  uint16_t bin;
+  uint16_t bcnt;
 
   while (*s) { //文字列1行分の終端まで繰り返す
     while (c_isspace(*s)) s++; //空白を読み飛ばす
@@ -529,6 +564,55 @@ unsigned char toktoi() {
       } //キーワードと単語が一致した場合の処理の末尾
 
     } //キーワードテーブルで変換を試みるの末尾
+
+    // 参考[https://github.com/Tamakichi/ttbasic_arduino_stm32/blob/master/ttbasic/basic.cpp]
+    // 16進数の変換を試みる
+    if (i == I_HEX) {
+      if (is_hexchar(*s)) {
+        hex = 0;
+        hcnt = 0;
+        do {
+          hex = (hex<<4) + hex2value(*s++);
+          hcnt++;
+        } while (is_hexchar(*s));
+        if (hcnt > 4) {
+          err = ERR_VOF;
+          return 0;
+        }
+        if (len >= SIZE_IBUF - 3) {
+          err = ERR_IBUFOF;
+          return 0;
+        }
+        len--; // $を置き換えるために格納位置を移動
+        ibuf[len++] = I_HEXNUM;
+        ibuf[len++] = hex & 255;
+        ibuf[len++] = hex >> 8;
+      }
+    }
+
+    // 2進数の変換を試みる
+    if (i == I_BIN) {
+      if ( *s == '0'|| *s == '1' ) {
+        bin = 0;
+        bcnt = 0;
+        do {
+          bin = (bin<<1) + (*s++)-'0';
+          bcnt++;
+        } while (*s == '0'|| *s == '1');
+        if (bcnt > 16) {
+          err = ERR_VOF;
+          return 0;
+        }
+        if (len >= SIZE_IBUF - 3) {
+          err = ERR_IBUFOF;
+          return 0;
+        }
+        len--;    // `を置き換えるために格納位置を移動
+        ibuf[len++] = I_BINNUM;
+        ibuf[len++] = bin & 255;
+        ibuf[len++] = bin >> 8;
+      }      
+    }
 
     //コメントへの変換を試みる
     if(i == I_REM) { //もし中間コードがI_REMなら
@@ -695,6 +779,48 @@ void inslist() {
     *p1++ = *p2++; //転送
 }
 
+// 16進数の出力
+void putHexnum(short value, uint8_t d) {
+
+  uint16_t hex = (uint16_t)value;
+  uint16_t h;
+  uint16_t dig;
+
+  if (hex >= 0x1000) dig = 4;
+  else if (hex >= 0x100) dig = 3;
+  else if (hex >= 0x10) dig = 2;
+  else dig = 1;
+
+  if (d != 0 && d > dig) dig = d;
+
+  for (uint8_t i = 0; i < 4; i++) {
+    h = ( hex >> (12 - i * 4) ) & 0x0f;
+    lbuf[i] = h <= 9 ? h + '0': h + 'A' - 10;
+  }
+  lbuf[4] = 0;
+  c_puts(&lbuf[4-dig]);
+}
+
+// 2進数の出力
+void putBinnum(int16_t value, uint8_t d) {
+  uint16_t bin = (uint16_t)value;
+  uint16_t dig = 0;
+
+  for (uint8_t i=0; i < 16; i++) {
+    if ( (0x8000>>i) & bin ) {
+      dig = 15 - i;
+      break;
+    }
+  }
+  dig++;
+  
+  if (d > dig) dig = d;
+
+  for (int8_t i=dig-1; i>=0; i--)
+    c_putch((bin & (1<<i)) ? '1':'0');
+
+}
+
 //Listing 1 line of i-code
 void putlist(unsigned char* ip) {
   unsigned char i; //ループカウンタ
@@ -728,6 +854,29 @@ void putlist(unsigned char* ip) {
         c_putch(' '); //空白を表示
     }
     else
+
+    //16進数定数の処理
+    if (*ip == I_HEXNUM) { //もし16進定数なら
+      ip++; //ポインタを値へ進める
+      c_putch('$'); //空白を表示
+      putHexnum(*ip | *(ip + 1) << 8, 2); //値を取得して表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        c_putch(' '); //空白を表示
+    }
+    else
+
+    //2進数定数の処理
+    if (*ip == I_BINNUM) { //もし2進定数なら
+      ip++; //ポインタを値へ進める
+      c_putch('`'); //"`"を表示
+      if (*(ip + 1)) putBinnum(*ip | *(ip + 1) << 8, 16); //値を取得して16桁で表示
+      else putBinnum(*ip, 8);  //値を取得して8桁で表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        c_putch(' '); //空白を表示
+    }
+    else 
 
     //変数の処理
     if (*ip == I_VAR) { //もし定数なら
@@ -816,6 +965,36 @@ short getparam() {
   return value; //値を持ち帰る
 }
 
+#ifdef _LCD_
+short iscr() {
+
+  short x_pos, y_pos;
+  short value;
+
+  check_paren_open();
+  if (err) return -1;
+
+  x_pos = getarg();
+  if (err) return -1;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return -1;
+  }
+  cip++;
+
+  y_pos = getarg();
+  if (err) return -1;
+
+  check_paren_close();
+  if (err) return -1;
+
+  value = lcd_scr(x_pos, y_pos);
+  return value;
+
+}
+#endif
+
 #ifdef _IO_
 short iioget(short gpio) {
 
@@ -859,6 +1038,8 @@ short ivalue() {
 
   //定数の取得
   case I_NUM: //定数の場合
+  case I_HEXNUM: // 16進数定数
+  case I_BINNUM: // 2進数定数
     cip++; //中間コードポインタを次へ進める
     value = *cip | *(cip + 1) << 8; //定数を取得
     cip += 2; //中間コードポインタを定数の次へ進める
@@ -875,6 +1056,11 @@ short ivalue() {
     cip++; //中間コードポインタを次へ進める
     value = 0 - ivalue(); //値を取得して負の値に変換
     break; //ここで打ち切る
+
+  case I_BITFLIP: // 「~」の場合
+    cip++; //中間コードポインタを次へ進める
+    value = ~((uint16_t)ivalue()); //値を取得してビット反転
+    break;
 
   //変数の値の取得
   case I_VAR: //変数の場合
@@ -899,6 +1085,15 @@ short ivalue() {
     }
     value = arr[value]; //配列の値を取得
     break; //ここで打ち切る
+
+#ifdef _LCD_
+  case I_SCR: //関数SCRの場合
+    cip++;
+    value = iscr();
+      if (err) //もしエラーが生じたら
+        break; //ここで打ち切る
+    break;
+#endif
 
 #ifdef _IO_
   case I_IOGET: //関数IOGETの場合
@@ -1036,6 +1231,35 @@ short imul() {
     value %= tmp; //割り算を実行
     break; 
 
+  case I_LSHIFT: // シフト演算 "<<" の場合
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)<<tmp;
+    break;
+
+  case I_RSHIFT: // シフト演算 ">>" の場合
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)>>tmp;
+    break; 
+
+  case I_AND:  // 論理積(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)&((uint16_t)tmp);
+    break; //ここで打ち切る
+
+  case I_OR:   //論理和(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)|((uint16_t)tmp);
+    break; 
+
+  case I_XOR: //排他的論理和(ビット演算)
+    cip++; //中間コードポインタを次へ進める
+    tmp = ivalue(); //演算値を取得
+    value =((uint16_t)value)^((uint16_t)tmp);
+
   default: //以上のいずれにも該当しなかった場合
     return value; //値を持ち帰る
   } //中間コードで分岐の末尾
@@ -1141,6 +1365,44 @@ void ichr() {
 }
 #endif
 
+// 16進数文字出力
+void ihex() {
+  short value; // 値
+  short d = 0; // 桁数(0で桁数指定なし)
+
+  check_paren_open();
+  if (err) return;
+  value = getparam();
+  if(err) return;
+  if (*cip == I_COMMA) {
+    cip++;
+    d = getparam();
+    if(err) return;
+  }
+  check_paren_close();
+  if (err) return;
+  putHexnum(value, d);    
+}
+
+// 2進数出力
+void ibin() {
+  int16_t value; // 値
+  int16_t d = 0; // 桁数(0で桁数指定なし)
+
+  check_paren_open();
+  if (err) return;
+  value = getparam();
+  if(err) return;
+  if (*cip == I_COMMA) {
+    cip++;
+    d = getparam();
+    if(err) return;
+  }
+  check_paren_close();
+  if (err) return;
+  putBinnum(value, d);    
+}
+
 // PRINT handler
 void iprint() {
   short value; //値
@@ -1164,6 +1426,19 @@ void iprint() {
       if (err) //もしエラーが生じたら
         return; //終了
       break; //打ち切る
+
+    case I_HEX:
+      cip++; //中間コードポインタを次へ進める
+      ihex();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
+    case I_BIN:
+      cip++; //中間コードポインタを次へ進める
+      ibin();
+      if (err) //もしエラーが生じたら
+        return; //終了
+      break;
 
 #ifdef _LCD_
     case I_CHR: //CHR()の場合
@@ -2294,6 +2569,49 @@ void inew(void) {
   clp = listbuf; //行ポインタをプログラム保存領域の先頭に設定
 }
 
+// 16進数のファイル出力
+void fputHexnum(short value, uint8_t d, FIL *fp) {
+
+  uint16_t hex = (uint16_t)value;
+  uint16_t h;
+  uint16_t dig;
+
+  if (hex >= 0x1000) dig = 4;
+  else if (hex >= 0x100) dig = 3;
+  else if (hex >= 0x10) dig = 2;
+  else dig = 1;
+
+  if (d != 0 && d > dig) dig = d;
+
+  for (uint8_t i = 0; i < 4; i++) {
+    h = ( hex >> (12 - i * 4) ) & 0x0f;
+    lbuf[i] = h <= 9 ? h + '0': h + 'A' - 10;
+  }
+  lbuf[4] = 0;
+  f_printf(fp, &lbuf[4-dig]);
+}
+
+// 2進数のファイル出力
+void fputBinnum(int16_t value, uint8_t d, FIL *fp) {
+
+  uint16_t bin = (uint16_t)value;
+  uint16_t  dig = 0;
+
+  for (uint8_t i=0; i < 16; i++) {
+    if ( (0x8000>>i) & bin ) {
+      dig = 15 - i;
+      break;
+    }
+  }
+  dig++;
+  
+  if (d > dig) 
+    dig = d;
+
+  for (int8_t i=dig-1; i>=0; i--)
+    f_putc((bin & (1<<i)) ? '1':'0', fp);
+
+}
 
 #ifdef _PROG_
 //Listing 1 line of i-code to file
@@ -2325,6 +2643,31 @@ void fputlist(FIL *fp, unsigned char* ip) {
                 if (!nospaceb(*ip)) f_putc(' ', fp);
             }
             else
+
+    //16進定数の処理
+    if (*ip == I_HEXNUM) { //もし16進定数なら
+      ip++; //ポインタを値へ進める
+      f_putc('$', fp); //空白を表示
+      fputHexnum(*ip | *(ip + 1) << 8, 2, fp); //値を取得して表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        f_putc(' ', fp); //空白を表示
+    }
+    else
+
+    //2進定数の処理
+    if (*ip == I_BINNUM) { //もし2進定数なら
+      ip++; //ポインタを値へ進める
+      f_putc('`', fp); //"`"を表示
+      if (*(ip + 1))
+          fputBinnum(*ip | *(ip + 1) << 8, 16, fp); //値を取得して16桁で表示
+      else
+          fputBinnum(*ip, 8, fp);  //値を取得して8桁で表示
+      ip += 2; //ポインタを次の中間コードへ進める
+      if (!nospaceb(*ip)) //もし例外にあたらなければ
+        f_putc(' ', fp); //空白を表示
+    }
+    else 
 
                 // Case variable
                 if (*ip == I_VAR) {

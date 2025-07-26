@@ -13,6 +13,9 @@ volatile uint8_t v_buf[8][128];
 // グラフィック画面用バッファ
 volatile uint8_t vg_buf[8][128];
 
+// SCR用の画面上文字バッファ
+volatile uint8_t scr_buf[8][21];
+
 volatile unsigned long current_frame = 0;
 
 volatile bool flg_vsync = false;
@@ -105,6 +108,12 @@ void lcd_cls(color cl, screen sc){
 
     if(sc == text) lcd_set_cursor(0, 0);
 
+    for(int i=0; i<8; i++) {
+      for(int j=0; j<21; j++) {
+        scr_buf[i][j] = 0;
+      }
+    }
+
 }
 
 void lcd_disp_vbuf(){
@@ -144,7 +153,7 @@ void lcd_slide_vbuf(scroll_dir dir, color cl){
 
         // 下の行にコピー
         for(int i=1; i<8; i++){
-            for(int j=1; j<128; j++){
+            for(int j=0; j<128; j++){
                 v_buf[i][j] = v_buf[i-1][j];
             }
         }
@@ -155,11 +164,23 @@ void lcd_slide_vbuf(scroll_dir dir, color cl){
             else v_buf[0][i] = 0b00000000;
         }
 
+        // 下の行にコピー
+        for(int i=1; i<8; i++) {
+          for(int j=0; j<21; j++) {
+            scr_buf[i][j] = scr_buf[i-1][j];
+          }
+        }
+
+        // 一番上の行を初期化
+        for(int i=0; i<21; i++){
+          scr_buf[0][i] = 0;
+        }
+
     } else {
 
         // 上の行にコピー
         for(int i=0; i<7; i++){
-            for(int j=1; j<128; j++){
+            for(int j=0; j<128; j++){
                 v_buf[i][j] = v_buf[i+1][j];
             }
         }
@@ -168,6 +189,18 @@ void lcd_slide_vbuf(scroll_dir dir, color cl){
         for(int i=0; i<128; i++){
             if(cl) v_buf[7][i] = 0b11111111;
             else v_buf[7][i] = 0b00000000;
+        }
+
+        // 上の行にコピー
+        for(int i=0; i<7; i++){
+          for(int j=0; j<21; j++){
+            scr_buf[i][j] = scr_buf[i+1][j];
+          }
+        }
+
+        // 一番下の行を初期化
+        for(int i=0; i<21; i++){
+          scr_buf[7][i] = 0;
         }
     }
 }
@@ -361,6 +394,8 @@ void lcd_print_c_section(uint8_t x_sec, uint8_t y_sec, uint8_t c_code, color cl)
         v_buf[y_sec][2+x_sec*6+font_data_col] = (cl) ? font[font_code][font_data_col] : ~font[font_code][font_data_col]; // 左端2列、右端1列空ける
     }
 
+    scr_buf[y_sec][x_sec] = c_code;
+
 }
 
 // ターミナルのような感じで自動でスクロールするように文字を表示する
@@ -545,6 +580,12 @@ void lcd_vsync(){
             break;
         }
     }
+}
+
+short lcd_scr(uint8_t x_pos, uint8_t y_pos) {
+
+  return scr_buf[y_pos][x_pos];
+
 }
 
 bool repeating_timer_callback(struct repeating_timer *t) {
