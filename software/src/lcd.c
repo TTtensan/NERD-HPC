@@ -206,9 +206,9 @@ void lcd_slide_vbuf(scroll_dir dir, color cl){
 }
 
 // x_pos(0~127), y_pos(0~47), cl(white, black)
-void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl, screen sc){
+void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc){
 
-    if(x_pos > 127 || y_pos > 63) return; // 画面外のドットは打たない
+    if(x_pos < 0 || 127 < x_pos || y_pos < 0 || 63 < y_pos) return; // 画面外のドットは打たない
 
     uint8_t page, dot_extract;
 
@@ -233,15 +233,15 @@ void lcd_pset(uint8_t x_pos, uint8_t y_pos, color cl, screen sc){
 
 }
 
-// プレゼンハムのアルゴリズム
+// ブレゼンハムのアルゴリズム
 // x_pos0,x_pos1(0~127), y_pos0,y_pos1(0~47), cl(white,black)
-void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl){
+void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl){
 
-    uint8_t tmp; // x,yの値入れ替え用
-    uint8_t delta_x, delta_y;
+    int16_t tmp; // x,yの値入れ替え用
+    int16_t delta_x, delta_y;
     int error; // 判定値
-    uint8_t x, y; // 点を打つ座標
-    int8_t y_step; // 次の点が+1されるか-1されるか
+    int16_t x, y; // 点を打つ座標
+    int16_t y_step; // 次の点が+1されるか-1されるか
 
     // アルゴリズム適用の前提条件
     // 傾きが45度以内になるように差分が大きい方を求め、必要ならx,yを入れ替える
@@ -283,11 +283,11 @@ void lcd_line(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, co
 
 }
 
-void lcd_rect(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, color cl, bool fill){
+void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, bool fill){
 
     if(fill){
         if(y_pos1 >= y_pos0){
-            for(uint8_t i=y_pos0; i<=y_pos1; i++){
+            for(int16_t i=y_pos0; i<=y_pos1; i++){
                 lcd_line(x_pos0, i, x_pos1, i, cl);
             }
         } else {
@@ -303,7 +303,7 @@ void lcd_rect(uint8_t x_pos0, uint8_t y_pos0, uint8_t x_pos1, uint8_t y_pos1, co
     }
 }
 
-void lcd_circle(uint8_t x_pos, uint8_t y_pos, uint8_t rad, color cl, bool fill){
+void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill){
 
     int x = rad;
     int y = 0;
