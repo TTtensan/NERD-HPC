@@ -33,10 +33,10 @@
 
 // TOYOSHIKI TinyBASIC symbols
 // TO-DO Rewrite defined values to fit your machine as needed
-#define SIZE_LINE 64 //Command line buffer length + NULL
-#define SIZE_IBUF 64 //i-code conversion buffer size
+#define SIZE_LINE 128 //Command line buffer length + NULL
+#define SIZE_IBUF 128 //i-code conversion buffer size
 #define SIZE_LIST 32768 //List buffer size
-#define SIZE_ARRY 64 //Array area size
+#define SIZE_ARRY 256 //Array area size
 #define SIZE_GSTK 20 //GOSUB stack size(2/nest)
 #define SIZE_LSTK 50 //FOR stack size(5/nest)
 
@@ -2554,7 +2554,7 @@ void ilist() {
 
 //NEW command handler
 void inew(void) {
-  unsigned char i; //ループカウンタ
+  unsigned short i; //ループカウンタ
 
   //変数と配列の初期化
   for (i = 0; i < 26; i++) //変数の数だけ繰り返す
