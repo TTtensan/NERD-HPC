@@ -117,6 +117,7 @@ const char *kwtbl[] = {
   "CHR",
   "LOCATE",
   "SCR",
+  "GPGET",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -189,6 +190,7 @@ enum {
   I_CHR,
   I_LOCATE,
   I_SCR,
+  I_GPGET,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -240,6 +242,7 @@ const unsigned char i_nsa[] = {
   I_GCLS,
   I_VSYNC,
   I_SCR,
+  I_GPGET,
 #endif
 #ifdef _IO_
   I_IOGET,
@@ -993,6 +996,34 @@ short iscr() {
   return value;
 
 }
+
+short igpget() {
+
+  short x_pos, y_pos;
+  short value;
+
+  check_paren_open();
+  if (err) return -1;
+
+  x_pos = getarg();
+  if (err) return -1;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return -1;
+  }
+  cip++;
+
+  y_pos = getarg();
+  if (err) return -1;
+
+  check_paren_close();
+  if (err) return -1;
+
+  value = lcd_pget(x_pos, y_pos);
+  return value;
+
+}
 #endif
 
 #ifdef _IO_
@@ -1090,6 +1121,13 @@ short ivalue() {
   case I_SCR: //関数SCRの場合
     cip++;
     value = iscr();
+      if (err) //もしエラーが生じたら
+        break; //ここで打ち切る
+    break;
+
+  case I_GPGET: //関数GPGETの場合
+    cip++;
+    value = igpget();
       if (err) //もしエラーが生じたら
         break; //ここで打ち切る
     break;
