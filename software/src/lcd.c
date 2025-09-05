@@ -588,6 +588,24 @@ short lcd_scr(uint8_t x_pos, uint8_t y_pos) {
 
 }
 
+bool lcd_pget(int16_t x_pos, int16_t y_pos) {
+
+  if(x_pos < 0 || 127 < x_pos || y_pos < 0 || 63 < y_pos) return 0; // 範囲外の指定は0を返す
+
+  uint8_t page, dot_extract;
+
+  page = y_pos >> 3; // 8で割って表示するページ数を求める
+
+  // 8で割った余りを求めて表示するビット位置を求める
+  dot_extract = 0b00000001;
+  for(uint8_t i=y_pos&0b00000111; i>0; i--){
+    dot_extract <<= 1;
+  }
+
+  return (v_buf[page][x_pos]|vg_buf[page][x_pos])&dot_extract;
+
+}
+
 bool repeating_timer_callback(struct repeating_timer *t) {
 
     lcd_disp_vbuf();
