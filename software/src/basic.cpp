@@ -33,17 +33,17 @@
 
 // TOYOSHIKI TinyBASIC symbols
 // TO-DO Rewrite defined values to fit your machine as needed
-#define SIZE_LINE 64 //Command line buffer length + NULL
-#define SIZE_IBUF 64 //i-code conversion buffer size
+#define SIZE_LINE 128 //Command line buffer length + NULL
+#define SIZE_IBUF 128 //i-code conversion buffer size
 #define SIZE_LIST 32768 //List buffer size
-#define SIZE_ARRY 64 //Array area size
+#define SIZE_ARRY 256 //Array area size
 #define SIZE_GSTK 20 //GOSUB stack size(2/nest)
 #define SIZE_LSTK 50 //FOR stack size(5/nest)
 
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.11.1"
+#define STR_VERSION "1.12.0"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -117,6 +117,8 @@ const char *kwtbl[] = {
   "CHR",
   "LOCATE",
   "SCR",
+  "GPGET",
+  "GTRI",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -189,6 +191,8 @@ enum {
   I_CHR,
   I_LOCATE,
   I_SCR,
+  I_GPGET,
+  I_GTRI,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -240,6 +244,7 @@ const unsigned char i_nsa[] = {
   I_GCLS,
   I_VSYNC,
   I_SCR,
+  I_GPGET,
 #endif
 #ifdef _IO_
   I_IOGET,
@@ -993,6 +998,34 @@ short iscr() {
   return value;
 
 }
+
+short igpget() {
+
+  short x_pos, y_pos;
+  short value;
+
+  check_paren_open();
+  if (err) return -1;
+
+  x_pos = getarg();
+  if (err) return -1;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return -1;
+  }
+  cip++;
+
+  y_pos = getarg();
+  if (err) return -1;
+
+  check_paren_close();
+  if (err) return -1;
+
+  value = lcd_pget(x_pos, y_pos);
+  return value;
+
+}
 #endif
 
 #ifdef _IO_
@@ -1090,6 +1123,13 @@ short ivalue() {
   case I_SCR: //関数SCRの場合
     cip++;
     value = iscr();
+      if (err) //もしエラーが生じたら
+        break; //ここで打ち切る
+    break;
+
+  case I_GPGET: //関数GPGETの場合
+    cip++;
+    value = igpget();
       if (err) //もしエラーが生じたら
         break; //ここで打ち切る
     break;
@@ -1865,6 +1905,37 @@ void ilocate() {
     lcd_set_cursor(x_pos, y_pos);
 
 }
+
+void igtri() {
+
+    short x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, color, fill;
+    x_pos0 = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos0 = iexp();
+    if(err) return;
+    cip++;
+    x_pos1 = iexp();
+    if(err) return;
+    cip++;
+    y_pos1 = iexp();
+    if(err) return;
+    cip++;
+    x_pos2 = iexp();
+    if(err) return;
+    cip++;
+    y_pos2 = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    cip++;
+    fill = iexp();
+    if(err) return;
+
+    if(color) lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, black, fill);
+    else lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, white, fill);
+}
 #endif
 
 #ifdef _USB_
@@ -2307,6 +2378,10 @@ unsigned char* iexe() {
       cip++;
       ilocate();
       break;
+    case I_GTRI: //中間コードがGTRIの場合
+      cip++;
+      igtri();
+      break;
 #endif
 #ifdef _USB_
     case I_SNDKCD: //中間コードがSNDKCDの場合
@@ -2554,7 +2629,7 @@ void ilist() {
 
 //NEW command handler
 void inew(void) {
-  unsigned char i; //ループカウンタ
+  unsigned short i; //ループカウンタ
 
   //変数と配列の初期化
   for (i = 0; i < 26; i++) //変数の数だけ繰り返す

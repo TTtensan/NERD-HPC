@@ -42,6 +42,7 @@ void lcd_slide_vbuf(scroll_dir dir, color cl);
 void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc);
 void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl);
 void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, bool fill);
+void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, int16_t x_pos2, int16_t y_pos2, color cl, bool fill);
 void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill);
 void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl);
 void lcd_gprint_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl, bool transparent);
@@ -56,6 +57,7 @@ void lcd_scroll(scroll_dir dir);
 void lcd_reverse_color(disp_status ds);
 void lcd_vsync();
 short lcd_scr(uint8_t x_pos, uint8_t y_pos);
+bool lcd_pget(int16_t x_pos, int16_t y_pos);
 
 bool repeating_timer_callback(struct repeating_timer *t);
 void lcd_start_disp_vbuf_timer();

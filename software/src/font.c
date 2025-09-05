@@ -1411,11 +1411,8 @@ void font_setfont(uint8_t c_code, char* data) {
   data_trim[2] = '\0';
   for(int i=0; i<5; i++){
     data_trim[0] = data[i*2];
-    printf("data_trim[0]:%c\n",data_trim[0]);
     data_trim[1] = data[i*2+1];
-    printf("data_trim[1]:%c\n",data_trim[1]);
     font[c_code][i] = (uint8_t)strtol(data_trim, NULL, 16);
-    printf("font[%u][%d]:%u\n",c_code,i,font[c_code][i]);
   }
 
 }

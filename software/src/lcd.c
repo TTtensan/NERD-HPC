@@ -303,6 +303,61 @@ void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, co
     }
 }
 
+void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, int16_t x_pos2, int16_t y_pos2, color cl, bool fill) {
+  if(fill) {
+
+    // 全ての座標が同じ場合
+    if (x_pos0 == x_pos1 && x_pos1 == x_pos2 && y_pos0 == y_pos1 && y_pos1 == y_pos2) {
+      lcd_pset(x_pos0, y_pos0, cl, graphic); // 1ドットだけ描く
+      return;
+    }
+
+    // y座標順にソート
+    if (y_pos0 > y_pos1) { int16_t t; t=y_pos0; y_pos0=y_pos1; y_pos1=t; t=x_pos0; x_pos0=x_pos1; x_pos1=t; }
+    if (y_pos0 > y_pos2) { int16_t t; t=y_pos0; y_pos0=y_pos2; y_pos2=t; t=x_pos0; x_pos0=x_pos2; x_pos2=t; }
+    if (y_pos1 > y_pos2) { int16_t t; t=y_pos1; y_pos1=y_pos2; y_pos2=t; t=x_pos1; x_pos1=x_pos2; x_pos2=t; }
+
+    // 面積が0(=線分)のとき
+    int area2 = (x_pos1 - x_pos0)*(y_pos2 - y_pos0) - (y_pos1 - y_pos0)*(x_pos2 - x_pos0);
+    if (area2 == 0) {
+      // 面積ゼロなので退化三角形
+      // → 線分か点として描画
+      lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl);
+      lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl);
+      return;
+    }
+
+
+    // 各辺の傾き
+    float dx13 = (float)(x_pos2 - x_pos0) / (y_pos2 - y_pos0);
+    float dx12 = (float)(x_pos1 - x_pos0) / (y_pos1 - y_pos0);
+    float dx23 = (float)(x_pos2 - x_pos1) / (y_pos2 - y_pos1);
+
+    float sx = (float)x_pos0;
+    float ex = (float)x_pos0;
+
+    // 上半分 (y_pos0 → y_pos1)
+    for (int16_t y = y_pos0; y <= y_pos1; y++) {
+      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      sx += dx13;
+      ex += dx12;
+    }
+
+    ex = (float)x_pos1;
+
+    // 下半分 (y_pos1 → y_pos2)
+    for (int16_t y = y_pos1; y <= y_pos2; y++) {
+      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      sx += dx13;
+      ex += dx23;
+    }
+  } else {
+    lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl);
+    lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl);
+    lcd_line(x_pos2, y_pos2, x_pos0, y_pos0, cl);
+  }
+}
+
 void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill){
 
     int x = rad;
@@ -585,6 +640,24 @@ void lcd_vsync(){
 short lcd_scr(uint8_t x_pos, uint8_t y_pos) {
 
   return scr_buf[y_pos][x_pos];
+
+}
+
+bool lcd_pget(int16_t x_pos, int16_t y_pos) {
+
+  if(x_pos < 0 || 127 < x_pos || y_pos < 0 || 63 < y_pos) return 0; // 範囲外の指定は0を返す
+
+  uint8_t page, dot_extract;
+
+  page = y_pos >> 3; // 8で割って表示するページ数を求める
+
+  // 8で割った余りを求めて表示するビット位置を求める
+  dot_extract = 0b00000001;
+  for(uint8_t i=y_pos&0b00000111; i>0; i--){
+    dot_extract <<= 1;
+  }
+
+  return (v_buf[page][x_pos]|vg_buf[page][x_pos])&dot_extract;
 
 }
 
