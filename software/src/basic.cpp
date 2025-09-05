@@ -118,6 +118,7 @@ const char *kwtbl[] = {
   "LOCATE",
   "SCR",
   "GPGET",
+  "GTRI",
 #endif
 #ifdef _USB_
   "SNDKCD",
@@ -191,6 +192,7 @@ enum {
   I_LOCATE,
   I_SCR,
   I_GPGET,
+  I_GTRI,
 #endif
 #ifdef _USB_
   I_SNDKCD,
@@ -1903,6 +1905,37 @@ void ilocate() {
     lcd_set_cursor(x_pos, y_pos);
 
 }
+
+void igtri() {
+
+    short x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, color, fill;
+    x_pos0 = iexp(); //値を取得
+    if(err) return;
+    cip++;
+    y_pos0 = iexp();
+    if(err) return;
+    cip++;
+    x_pos1 = iexp();
+    if(err) return;
+    cip++;
+    y_pos1 = iexp();
+    if(err) return;
+    cip++;
+    x_pos2 = iexp();
+    if(err) return;
+    cip++;
+    y_pos2 = iexp();
+    if(err) return;
+    cip++;
+    color = iexp();
+    if(err) return;
+    cip++;
+    fill = iexp();
+    if(err) return;
+
+    if(color) lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, black, fill);
+    else lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, white, fill);
+}
 #endif
 
 #ifdef _USB_
@@ -2344,6 +2377,10 @@ unsigned char* iexe() {
     case I_LOCATE: //中間コードがLOCATEの場合
       cip++;
       ilocate();
+      break;
+    case I_GTRI: //中間コードがGTRIの場合
+      cip++;
+      igtri();
       break;
 #endif
 #ifdef _USB_
