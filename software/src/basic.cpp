@@ -80,6 +80,7 @@ short getrnd(short value) {
 
 // Prototypes (necessity minimum)
 short iexp(void);
+void iload();
 
 // Keyword table
 const char *kwtbl[] = {
@@ -2470,6 +2471,9 @@ unsigned char* iexe() {
 
 // RUN command handler
 void irun() {
+
+  if (*cip == I_STR) iload(); // ファイル名が続いていれば読み込んで実行
+
   unsigned char* lp; //行ポインタの一時的な記憶場所
 
   gstki = 0; //GOSUBスタックインデクスを0に初期化
@@ -2943,31 +2947,10 @@ bool iload_autorun() {
         return 1;
     }
 
-//    if (*cip != I_STR) {
-//        err = ERR_SYNTAX;
-//        return;
-//    }
-//    cip++;
-//
-//    len = *cip;
-//    if (len == 0) {
-//        err = ERR_SYNTAX;
-//        return;
-//    }
-//    cip++;
-//
-//    for (i = 0; i < len; i++) buf[i] = *cip++;
     sprintf(buf, "AUTORUN.TXT");
-    //buf[i] = 0;
-
-//    if (*cip != I_EOL) {
-//        err = ERR_SYNTAX;
-//        return;
-//    }
 
     fr = f_open(&fp, buf, FA_OPEN_EXISTING | FA_READ);
     if (FR_OK != fr && FR_EXIST != fr) {
-        //err = ERR_FNFOUND;
         return 1;
     }
 
