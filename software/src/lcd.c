@@ -12,6 +12,8 @@
 volatile uint8_t v_buf[8][128];
 // グラフィック画面用バッファ
 volatile uint8_t vg_buf[8][128];
+// その他情報画面用バッファ
+volatile uint8_t vi_buf[8][128];
 
 // SCR用の画面上文字バッファ
 volatile uint8_t scr_buf[8][21];
@@ -25,6 +27,9 @@ static uint8_t y_cursor = 0;
 static uint8_t count_candel = 0; // print_c_autoでdelが来た際に文字が何個消去できるかのカウント
 
 uint8_t c_code_prev = '0';
+
+volatile bool flg_disp_cursor = false;
+volatile unsigned long frame_count_for_cursor = 0;
 
 void lcd_init(){
 
@@ -60,6 +65,7 @@ void lcd_init(){
     // 画面のクリア
     lcd_cls(white, text);
     lcd_cls(white, graphic);
+    lcd_cls(white, info);
 
     lcd_start_disp_vbuf_timer();
 
@@ -99,9 +105,11 @@ void lcd_cls(color cl, screen sc){
             if(cl){
                 if(sc == text) v_buf[i][j] = 0b11111111;
                 else if(sc == graphic) vg_buf[i][j] = 0b11111111;
+                else if(sc == info) vi_buf[i][j] = 0b11111111;
             } else {
                 if(sc == text) v_buf[i][j] = 0b00000000;
                 else if(sc == graphic) vg_buf[i][j] = 0b00000000;
+                else if(sc == info) vi_buf[i][j] = 0b00000000;
             }
         }
     }
@@ -134,7 +142,7 @@ void lcd_disp_vbuf(){
 
         gpio_put(PIN_LCD_RS, 1); // ディスプレイデータの送信
         for(int j=0; j<128; j++){
-            src[0] = v_buf[i][j] | vg_buf[i][j];
+            src[0] = v_buf[i][j] | vg_buf[i][j] | vi_buf[i][j];
             spi_write_blocking(spi1, src, 1);
         }
 
@@ -224,10 +232,12 @@ void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc){
     if(cl){
         if(sc == text) v_buf[page][x_pos] |= dot_extract;
         else if(sc == graphic) vg_buf[page][x_pos] |= dot_extract;
+        else if(sc == info) vi_buf[page][x_pos] |= dot_extract;
     } else {
         dot_extract = ~dot_extract;
         if(sc == text) v_buf[page][x_pos] &= dot_extract;
         else if(sc == graphic) vg_buf[page][x_pos] &= dot_extract;
+        else if(sc == info) vi_buf[page][x_pos] &= dot_extract;
 
     }
 
@@ -643,6 +653,35 @@ short lcd_scr(uint8_t x_pos, uint8_t y_pos) {
 
 }
 
+void lcd_reset_cursor_timer() {
+
+  frame_count_for_cursor = 0;
+
+}
+
+void lcd_disp_cursor() {
+}
+
+void lcd_hide_cursor() {
+
+  lcd_cls(white, info);
+
+}
+
+void lcd_start_disp_cursor() {
+
+  lcd_reset_cursor_timer();
+  flg_disp_cursor = true;
+
+}
+
+void lcd_end_disp_cursor() {
+
+  flg_disp_cursor = false;
+  lcd_hide_cursor();
+
+}
+
 bool lcd_pget(int16_t x_pos, int16_t y_pos) {
 
   if(x_pos < 0 || 127 < x_pos || y_pos < 0 || 63 < y_pos) return 0; // 範囲外の指定は0を返す
@@ -664,7 +703,21 @@ bool lcd_pget(int16_t x_pos, int16_t y_pos) {
 bool repeating_timer_callback(struct repeating_timer *t) {
 
     lcd_disp_vbuf();
+
     current_frame++;
+
+    frame_count_for_cursor++;
+    if(flg_disp_cursor) {
+      if(frame_count_for_cursor <= 30) {
+        lcd_cls(white, info);
+        lcd_disp_cursor();
+      } else if(frame_count_for_cursor <= 60) {
+        lcd_hide_cursor();
+      } else {
+        lcd_reset_cursor_timer();
+      }
+    }
+
     return true;
 
 }

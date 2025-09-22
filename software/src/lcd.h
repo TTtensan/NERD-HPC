@@ -29,7 +29,8 @@ typedef enum {
 
 typedef enum {
     text,
-    graphic
+    graphic,
+    info,
 } screen;
 
 void lcd_init();
@@ -58,6 +59,11 @@ void lcd_reverse_color(disp_status ds);
 void lcd_vsync();
 short lcd_scr(uint8_t x_pos, uint8_t y_pos);
 bool lcd_pget(int16_t x_pos, int16_t y_pos);
+void lcd_reset_cursor_timer();
+void lcd_disp_cursor();
+void lcd_hide_cursor();
+void lcd_start_disp_cursor();
+void lcd_end_disp_cursor();
 
 bool repeating_timer_callback(struct repeating_timer *t);
 void lcd_start_disp_vbuf_timer();
