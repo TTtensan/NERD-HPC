@@ -128,6 +128,11 @@ uint32_t ioexp_getchr_available() {
     else return 0;
 }
 
+void ioexp_stop_keyscan_timer() {
+
+    cancel_repeating_timer(&ioexp_timer);
+}
+
 bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
 
     uint8_t chrinfo[2] = {0};
@@ -150,17 +155,22 @@ bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
             if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) status_shift = false; // shift
         }
     }
+    ioexp_stop_keyscan_timer();
     return true;
-}
-
-void ioexp_stop_keyscan_timer() {
-
-    cancel_repeating_timer(&ioexp_timer);
 }
 
 void ioexp_start_keyscan_timer() {
 
-    add_repeating_timer_ms(50, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
+    add_repeating_timer_ms(20, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
+}
+
+void ioexp_gpio_callback(uint gpio, uint32_t events) {
+  if (gpio == PIN_IOEXP_INTA) {
+    if (events & GPIO_IRQ_EDGE_FALL) {
+      ioexp_stop_keyscan_timer();
+      ioexp_start_keyscan_timer();
+    }
+  }
 }
 
 void ioexp_init() {
@@ -191,7 +201,21 @@ void ioexp_init() {
     ioexp_write_register(IOEXP_IODIRA, 0b11111111);
     ioexp_write_register(IOEXP_IODIRB, 0b00000000);
 
-    ioexp_start_keyscan_timer();
+    // Aピンの割り込みを許可する
+    ioexp_write_register(IOEXP_GPINTENA, 0b11111111);
+
+    // キー情報を読み出してINTAをリセットする
+    uint8_t chrinfo[2] = {0};
+    ioexp_getchrinfo(chrinfo);
+
+    // ハードウェア割り込みの有効化
+    gpio_set_irq_enabled_with_callback(
+        PIN_IOEXP_INTA,
+        GPIO_IRQ_EDGE_FALL,
+        true,
+        &ioexp_gpio_callback
+        );
+
 }
 
 void ioexp_write_register(uint8_t reg, uint8_t value) {
@@ -208,6 +232,14 @@ void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
 }
 
 void ioexp_getchrinfo(uint8_t chrinfo[2]) {
+
+    // 読み出し処理中に割り込みが発生しないように止める
+    gpio_set_irq_enabled_with_callback(
+        PIN_IOEXP_INTA,
+        GPIO_IRQ_EDGE_FALL,
+        false,
+        &ioexp_gpio_callback
+        );
 
     chrinfo[0] = 0x00;
 
@@ -240,11 +272,43 @@ void ioexp_getchrinfo(uint8_t chrinfo[2]) {
                     //prev_keyinfo_tmp = prev_keyinfo_tmp >> i+1;
                     //prev_keyinfo_tmp = prev_keyinfo_tmp << i+1;
                     prev_keyinfo[i] = current_keyinfo[0];
+
+                    // 全ての入力を有効にして割り込みに備える
+                    ioexp_write_register(IOEXP_OLATB, 0b00000000);
+
+                    // INTAリセットのための読み出し
+                    uint8_t tmp_keyinfo[1] = { 0xff };
+                    ioexp_read_register(IOEXP_GPIOA, tmp_keyinfo);
+
+                    // ハードウェア割り込み再開
+                    gpio_set_irq_enabled_with_callback(
+                        PIN_IOEXP_INTA,
+                        GPIO_IRQ_EDGE_FALL,
+                        true,
+                        &ioexp_gpio_callback
+                        );
+
                     return;
                 }
             }
         }
     }
+
+    // 全ての入力を有効にして割り込みに備える
+    ioexp_write_register(IOEXP_OLATB, 0b00000000);
+
+    // INTAリセットのための読み出し
+    uint8_t tmp_keyinfo[1] = { 0xff };
+    ioexp_read_register(IOEXP_GPIOA, tmp_keyinfo);
+
+    // ハードウェア割り込み再開
+    gpio_set_irq_enabled_with_callback(
+        PIN_IOEXP_INTA,
+        GPIO_IRQ_EDGE_FALL,
+        true,
+        &ioexp_gpio_callback
+        );
+
 }
 
 short ioexp_getkey(short index) {

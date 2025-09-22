@@ -18,6 +18,10 @@ void pin_init(){
     gpio_set_dir(PIN_IOEXP_RST, GPIO_OUT);
     gpio_put(PIN_IOEXP_RST, 1);
 
+    gpio_init(PIN_IOEXP_INTA);
+    gpio_set_dir(PIN_IOEXP_INTA, GPIO_IN);
+    gpio_pull_up(PIN_IOEXP_INTA);
+
     i2c_init(i2c0, 100000);
     gpio_set_function(PIN_IOEXP_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_IOEXP_SCL, GPIO_FUNC_I2C);
