@@ -322,13 +322,7 @@ void ioexp_getchrinfo() {
             chrinfo[1] = button_release;
           }
 
-          // スキャンしたところまでprev_keyinfoと統合
-          // j+1ビット分のマスク (例: j=1 -> 0b00000011)
-          uint8_t mask = (1U << j+1) - 1;
-          prev_keyinfo[i] = 
-            (prev_keyinfo[i] & ~mask) | 
-            (current_keyinfo[0] & mask);
-
+          // キーの入力情報を変換してバッファに保存
           if(chrinfo[0] != 0x00) { // 未入力、未定義のキーは処理しない
             if(chrinfo[1] == button_push) {
               if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) { // Shift
@@ -350,6 +344,10 @@ void ioexp_getchrinfo() {
 
         }
       }
+
+      // prev_keyinfoを更新
+      prev_keyinfo[i] = current_keyinfo[0];
+
     }
   }
 
