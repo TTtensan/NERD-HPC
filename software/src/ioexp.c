@@ -8,8 +8,11 @@ static struct repeating_timer ioexp_timer;
 
 // 前回スキャン時のキーの押下情報 1ビットで記録 0=押下 1=リリース
 volatile uint8_t prev_keyinfo[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-volatile bool flg_getchr_available = false;
-volatile uint8_t current_chr = 0x00;
+volatile uint8_t current_chr_buf[IOEXP_CHRBUF] = { 0x00 };
+// 読み出し位置のポインタ
+volatile uint8_t current_chr_buf_rp = 0;
+// 書き込み位置のポインタ
+volatile uint8_t current_chr_buf_wp = 0;
 
 volatile bool status_shift = false;
 volatile bool status_caps = true;
@@ -117,61 +120,125 @@ char ioexp_bl2tl(char code) {
     return code;
 }
 
+void ioexp_write_register(uint8_t reg, uint8_t value) {
+
+    uint8_t command[] = { reg, value };
+    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 2, false);
+}
+
+void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
+
+    uint8_t command[] = { reg };
+    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 1, true);
+    i2c_read_blocking(i2c0, IOEXP_ADDR, retval, 1, false);
+}
+
+void ioexp_current_chr_buf_write(uint8_t chr) {
+
+  printf("write buf:%c\n", chr);
+  current_chr_buf[current_chr_buf_wp] = chr;
+  current_chr_buf_wp++;
+
+  // リングバッファの最後尾に到達すると冒頭にポインタを移動
+  if(current_chr_buf_wp == IOEXP_CHRBUF) current_chr_buf_wp = 0;
+}
+
+uint8_t ioexp_current_chr_buf_read() {
+
+  uint8_t chr_return = current_chr_buf[current_chr_buf_rp];
+
+  current_chr_buf_rp++;
+
+  // リングバッファの最後尾に到達すると冒頭にポインタを移動
+  if(current_chr_buf_rp == IOEXP_CHRBUF) current_chr_buf_rp = 0;
+
+  return chr_return;
+  
+}
+
 char ioexp_getchr() {
-    while(!flg_getchr_available);
-    flg_getchr_available = false;
-    return current_chr;
+    while(current_chr_buf_wp == current_chr_buf_rp);
+    return ioexp_current_chr_buf_read();
 }
 
 uint32_t ioexp_getchr_available() {
-    if(flg_getchr_available) return 1;
+    if(current_chr_buf_wp != current_chr_buf_rp) return 1;
     else return 0;
 }
 
 void ioexp_stop_keyscan_timer() {
 
     cancel_repeating_timer(&ioexp_timer);
+
 }
 
 bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
 
-    uint8_t chrinfo[2] = {0};
-    ioexp_getchrinfo(chrinfo);
-    if(chrinfo[0] != 0x00) { // 未入力、未定義のキーは処理しない
-        if(chrinfo[1] == button_push) {
-            if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) { // Shift
-                status_shift = true;
-            } else if(chrinfo[0] == CODE_CAPS) { // Caps
-                status_caps = !status_caps;
-            } else if(chrinfo[0] == CODE_2NDFN) { // 2ndFn
-                status_2ndfn = !status_2ndfn;
-            } else {
-                current_chr = chrinfo[0];
-                if(status_caps) current_chr = ioexp_sl2bl(current_chr);
-                if(status_2ndfn) current_chr = ioexp_bl2tl(current_chr);
-                flg_getchr_available = true;
-            }
-        } else {
-            if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) status_shift = false; // shift
-        }
-    }
+    ioexp_getchrinfo();
     ioexp_stop_keyscan_timer();
     return true;
+
 }
 
 void ioexp_start_keyscan_timer() {
 
     add_repeating_timer_ms(20, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
+
 }
 
+void ioexp_reset_inta() {
+
+  uint8_t tmp_keyinfo[1] = { 0xff };
+  ioexp_read_register(IOEXP_GPIOA, tmp_keyinfo);
+
+}
+
+
 void ioexp_gpio_callback(uint gpio, uint32_t events) {
+
   if (gpio == PIN_IOEXP_INTA) {
+
     if (events & GPIO_IRQ_EDGE_FALL) {
+
+      ioexp_reset_inta();
       ioexp_stop_keyscan_timer();
       ioexp_start_keyscan_timer();
+
     }
+
   }
+
 }
+
+void ioexp_start_keyscan_interrupt() {
+
+  // 全ての入力を有効にして割り込みに備える
+  ioexp_write_register(IOEXP_OLATB, 0b00000000);
+
+  // INTAリセットのための読み出し
+  ioexp_reset_inta();
+
+  // ハードウェア割り込み再開
+  gpio_set_irq_enabled_with_callback(
+      PIN_IOEXP_INTA,
+      GPIO_IRQ_EDGE_FALL,
+      true,
+      &ioexp_gpio_callback
+      );
+
+}
+
+void ioexp_stop_keyscan_interrupt() {
+
+    gpio_set_irq_enabled_with_callback(
+        PIN_IOEXP_INTA,
+        GPIO_IRQ_EDGE_FALL,
+        false,
+        &ioexp_gpio_callback
+        );
+
+}
+
 
 void ioexp_init() {
     
@@ -204,116 +271,95 @@ void ioexp_init() {
     // Aピンの割り込みを許可する
     ioexp_write_register(IOEXP_GPINTENA, 0b11111111);
 
-    // キー情報を読み出してINTAをリセットする
-    uint8_t chrinfo[2] = {0};
-    ioexp_getchrinfo(chrinfo);
-
     // ハードウェア割り込みの有効化
-    gpio_set_irq_enabled_with_callback(
-        PIN_IOEXP_INTA,
-        GPIO_IRQ_EDGE_FALL,
-        true,
-        &ioexp_gpio_callback
-        );
+    ioexp_start_keyscan_interrupt();
 
 }
 
-void ioexp_write_register(uint8_t reg, uint8_t value) {
+void ioexp_getchrinfo() {
 
-    uint8_t command[] = { reg, value };
-    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 2, false);
-}
+  uint8_t chrinfo[2];
 
-void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
+  // キースキャン中に発生する割り込みを無視
+  ioexp_stop_keyscan_interrupt();
 
-    uint8_t command[] = { reg };
-    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 1, true);
-    i2c_read_blocking(i2c0, IOEXP_ADDR, retval, 1, false);
-}
+  chrinfo[0] = 0x00;
 
-void ioexp_getchrinfo(uint8_t chrinfo[2]) {
+  // 1列ずつキーマトリクスで押下情報が変化した列を確認する
+  for(int i=0; i<8; i++){
 
-    // 読み出し処理中に割り込みが発生しないように止める
-    gpio_set_irq_enabled_with_callback(
-        PIN_IOEXP_INTA,
-        GPIO_IRQ_EDGE_FALL,
-        false,
-        &ioexp_gpio_callback
-        );
+    // 対象の列の出力を変えてその列の情報を取得
+    uint8_t offbit = ~(0b00000001 << i);
+    ioexp_write_register(IOEXP_OLATB, offbit);
+    uint8_t current_keyinfo[1] = { 0xff };
+    ioexp_read_register(IOEXP_GPIOA, current_keyinfo);
 
-    chrinfo[0] = 0x00;
+    // 変化していたら
+    if(prev_keyinfo[i] != current_keyinfo[0]) {
 
-    for(int i=0; i<8; i++){
+      // 1行ずつ確認
+      for(int j=0; j<8; j++){
 
-        uint8_t offbit = ~(0b00000001 << i);
-        ioexp_write_register(IOEXP_OLATB, offbit);
-        uint8_t current_keyinfo[1] = { 0xff };
-        ioexp_read_register(IOEXP_GPIOA, current_keyinfo);
+        // ビット演算のためにtmpに格納
+        uint8_t prev_keyinfo_tmp = prev_keyinfo[i];
+        uint8_t current_keyinfo_tmp = current_keyinfo[0];
 
-        if(prev_keyinfo[i] != current_keyinfo[0]) {
-            for(int j=0; j<8; j++){
-                uint8_t prev_keyinfo_tmp = prev_keyinfo[i];
-                uint8_t current_keyinfo_tmp = current_keyinfo[0];
-                prev_keyinfo_tmp <<= 7-j;
-                current_keyinfo_tmp <<= 7-j;
-                if(prev_keyinfo_tmp != current_keyinfo_tmp) {
-                    chrinfo[0] = table_key2code[status_shift][j][i]; // 変化があったキーのコードを格納
-                    if(!g_en_esc && chrinfo[0] == 0x1b) chrinfo[0] = 0; // ESCを無効にしていた場合
-                    if(prev_keyinfo_tmp > current_keyinfo_tmp) {
-                        chrinfo[1] = button_push;
-                    } else {
-                        chrinfo[1] = button_release;
-                    }
-                    //// スキャンしたところまでprev_keyinfoに格納
-                    //uint8_t current_keyinfo_tmp = current_keyinfo[0];
-                    //current_keyinfo_tmp = current_keyinfo_tmp << 7-i;
-                    //current_keyinfo_tmp = current_keyinfo_tmp >> 7-i;
-                    //uint8_t prev_keyinfo_tmp = prev_keyinfo[i];
-                    //prev_keyinfo_tmp = prev_keyinfo_tmp >> i+1;
-                    //prev_keyinfo_tmp = prev_keyinfo_tmp << i+1;
-                    prev_keyinfo[i] = current_keyinfo[0];
+        prev_keyinfo_tmp &= 1<<j;
+        current_keyinfo_tmp &= 1<<j;
 
-                    // 全ての入力を有効にして割り込みに備える
-                    ioexp_write_register(IOEXP_OLATB, 0b00000000);
+        if(prev_keyinfo_tmp != current_keyinfo_tmp) {
 
-                    // INTAリセットのための読み出し
-                    uint8_t tmp_keyinfo[1] = { 0xff };
-                    ioexp_read_register(IOEXP_GPIOA, tmp_keyinfo);
+          // 変化があったキーのコードを格納
+          chrinfo[0] = table_key2code[status_shift][j][i];
 
-                    // ハードウェア割り込み再開
-                    gpio_set_irq_enabled_with_callback(
-                        PIN_IOEXP_INTA,
-                        GPIO_IRQ_EDGE_FALL,
-                        true,
-                        &ioexp_gpio_callback
-                        );
+          // ESCを無効にしていた場合
+          if(!g_en_esc && chrinfo[0] == 0x1b) chrinfo[0] = 0;
 
-                    return;
-                }
+          // プッシュ、リリースの情報を格納
+          if(prev_keyinfo_tmp > current_keyinfo_tmp) {
+            chrinfo[1] = button_push;
+          } else {
+            chrinfo[1] = button_release;
+          }
+
+          // スキャンしたところまでprev_keyinfoと統合
+          // j+1ビット分のマスク (例: j=1 -> 0b00000011)
+          uint8_t mask = (1U << j+1) - 1;
+          prev_keyinfo[i] = 
+            (prev_keyinfo[i] & ~mask) | 
+            (current_keyinfo[0] & mask);
+
+          if(chrinfo[0] != 0x00) { // 未入力、未定義のキーは処理しない
+            if(chrinfo[1] == button_push) {
+              if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) { // Shift
+                status_shift = true;
+              } else if(chrinfo[0] == CODE_CAPS) { // Caps
+                status_caps = !status_caps;
+              } else if(chrinfo[0] == CODE_2NDFN) { // 2ndFn
+                status_2ndfn = !status_2ndfn;
+              } else {
+                uint8_t current_chr_tmp = chrinfo[0];
+                if(status_caps) current_chr_tmp = ioexp_sl2bl(current_chr_tmp);
+                if(status_2ndfn) current_chr_tmp = ioexp_bl2tl(current_chr_tmp);
+                ioexp_current_chr_buf_write(current_chr_tmp);
+              }
+            } else {
+              if(chrinfo[0] == 0x0e || chrinfo[0] == 0x0f) status_shift = false; // shift
             }
+          }
+
         }
+      }
     }
+  }
 
-    // 全ての入力を有効にして割り込みに備える
-    ioexp_write_register(IOEXP_OLATB, 0b00000000);
-
-    // INTAリセットのための読み出し
-    uint8_t tmp_keyinfo[1] = { 0xff };
-    ioexp_read_register(IOEXP_GPIOA, tmp_keyinfo);
-
-    // ハードウェア割り込み再開
-    gpio_set_irq_enabled_with_callback(
-        PIN_IOEXP_INTA,
-        GPIO_IRQ_EDGE_FALL,
-        true,
-        &ioexp_gpio_callback
-        );
+  ioexp_start_keyscan_interrupt();
 
 }
 
 short ioexp_getkey(short index) {
 
-    ioexp_stop_keyscan_timer();
+    ioexp_stop_keyscan_interrupt();
 
     short keys[8] = {0x00};
     short index_current = 0;
@@ -338,8 +384,7 @@ short ioexp_getkey(short index) {
                     status_shift = true;
                     flg_shift = true;
                 } else if (g_en_esc && table_key2code[status_shift][j][i] == 0x1b) { // Esc
-                    current_chr = 0x1b;
-                    flg_getchr_available = true;
+                    ioexp_current_chr_buf_write(0x1b);
                 }
                 if(g_en_shift) keys[index_current] = table_key2code[status_shift][j][i]; // 押下したキーのコードを格納
                 else keys[index_current] = table_key2code[0][j][i];
@@ -350,7 +395,7 @@ short ioexp_getkey(short index) {
     }
     if(!flg_shift) status_shift = false;
 
-    ioexp_start_keyscan_timer();
+    ioexp_start_keyscan_interrupt();
 
     return keys[index];
 }
