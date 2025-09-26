@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#define IOEXP_CHRBUF 8
+
 #define IOEXP_ADDR       0x20
 #define IOEXP_IODIRA     0x00
 #define IOEXP_IODIRB     0x01
@@ -50,7 +52,7 @@ void ioexp_init();
 char ioexp_getchr();
 uint32_t ioexp_getchr_available();
 void ioexp_write_register(uint8_t reg, uint8_t value);
-void ioexp_getchrinfo(uint8_t chrinfo[2]); // キーのコードと押したか離したかの情報を渡す
+void ioexp_getchrinfo(); // キーのコードと押したか離したかの情報を渡す
 short ioexp_getkey(short index); // 現在押下しているキーの配列からindex番目のキー情報を返す
 
 extern volatile short g_en_shift, g_en_esc;
