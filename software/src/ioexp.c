@@ -120,22 +120,81 @@ char ioexp_bl2tl(char code) {
     return code;
 }
 
+static void i2c_bus_recover(uint sda_pin, uint scl_pin) {
+    // I2C を GPIO に切り替え
+    gpio_set_function(sda_pin, GPIO_FUNC_SIO);
+    gpio_set_function(scl_pin, GPIO_FUNC_SIO);
+    gpio_pull_up(sda_pin);
+    gpio_pull_up(scl_pin);
+    gpio_set_dir(scl_pin, true);
+    gpio_set_dir(sda_pin, true);
+
+    // SDA が Low のままならクロックを送って解放
+    for (int i = 0; i < 9; i++) {
+        if (gpio_get(sda_pin)) break; // SDA が High ならOK
+        gpio_put(scl_pin, 0);
+        sleep_us(5);
+        gpio_put(scl_pin, 1);
+        sleep_us(5);
+    }
+
+    // STOP コンディションを生成
+    gpio_put(scl_pin, 1);
+    sleep_us(5);
+    gpio_put(sda_pin, 1);
+    sleep_us(5);
+
+    // I2C 機能に戻す
+    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
+    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
+
+    i2c_init(i2c0, I2C0_BAUDRATE); // 再初期化
+}
+
 void ioexp_write_register(uint8_t reg, uint8_t value) {
 
     uint8_t command[] = { reg, value };
-    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 2, false);
+
+    // バスがビジーならリカバリ
+    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
+      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+    }
+
+    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 2, false, 30000);
+
+    // 通信に失敗したらリカバリ
+    if (ret < 0) {
+      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+    }
 }
 
 void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
 
     uint8_t command[] = { reg };
-    i2c_write_blocking(i2c0, IOEXP_ADDR, command, 1, true);
-    i2c_read_blocking(i2c0, IOEXP_ADDR, retval, 1, false);
+
+    // バスがビジーならリカバリ
+    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
+      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+    }
+
+    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 1, true, 30000);
+
+    // 通信に失敗したらリカバリ
+    if (ret < 0) {
+      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+      return;
+    }
+
+    ret = i2c_read_timeout_us(i2c0, IOEXP_ADDR, retval, 1, false, 30000);
+
+    // 通信に失敗したらリカバリ
+    if (ret < 0) {
+      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+    }
 }
 
 void ioexp_current_chr_buf_write(uint8_t chr) {
 
-  printf("write buf:%c\n", chr);
   current_chr_buf[current_chr_buf_wp] = chr;
   current_chr_buf_wp++;
 
@@ -175,14 +234,13 @@ void ioexp_stop_keyscan_timer() {
 bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
 
     ioexp_getchrinfo();
-    ioexp_stop_keyscan_timer();
     return true;
 
 }
 
 void ioexp_start_keyscan_timer() {
 
-    add_repeating_timer_ms(20, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
+    add_repeating_timer_ms(50, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
 
 }
 
@@ -271,17 +329,14 @@ void ioexp_init() {
     // Aピンの割り込みを許可する
     ioexp_write_register(IOEXP_GPINTENA, 0b11111111);
 
-    // ハードウェア割り込みの有効化
-    ioexp_start_keyscan_interrupt();
+    // タイマー割り込みの有効化
+    ioexp_start_keyscan_timer();
 
 }
 
 void ioexp_getchrinfo() {
 
   uint8_t chrinfo[2];
-
-  // キースキャン中に発生する割り込みを無視
-  ioexp_stop_keyscan_interrupt();
 
   chrinfo[0] = 0x00;
 
@@ -351,13 +406,11 @@ void ioexp_getchrinfo() {
     }
   }
 
-  ioexp_start_keyscan_interrupt();
-
 }
 
 short ioexp_getkey(short index) {
 
-    ioexp_stop_keyscan_interrupt();
+    ioexp_stop_keyscan_timer();
 
     short keys[8] = {0x00};
     short index_current = 0;
@@ -393,7 +446,7 @@ short ioexp_getkey(short index) {
     }
     if(!flg_shift) status_shift = false;
 
-    ioexp_start_keyscan_interrupt();
+    ioexp_start_keyscan_timer();
 
     return keys[index];
 }

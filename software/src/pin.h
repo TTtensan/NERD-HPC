@@ -38,6 +38,8 @@
 #define UART_ID_GENIO uart1
 #define I2C_ID_GENIO i2c1
 
+#define I2C0_BAUDRATE 1000000
+
 void pin_init();
 
 #endif

@@ -22,7 +22,7 @@ void pin_init(){
     gpio_set_dir(PIN_IOEXP_INTA, GPIO_IN);
     gpio_pull_up(PIN_IOEXP_INTA);
 
-    i2c_init(i2c0, 100000);
+    i2c_init(i2c0, I2C0_BAUDRATE);
     gpio_set_function(PIN_IOEXP_SDA, GPIO_FUNC_I2C);
     gpio_set_function(PIN_IOEXP_SCL, GPIO_FUNC_I2C);
     gpio_set_pulls(PIN_IOEXP_SDA, true, false);
