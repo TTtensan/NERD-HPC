@@ -155,42 +155,42 @@ void ioexp_write_register(uint8_t reg, uint8_t value) {
 
     uint8_t command[] = { reg, value };
 
-    // バスがビジーならリカバリ
-    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
-      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-    }
+//    // バスがビジーならリカバリ
+//    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
+//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+//    }
 
     int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 2, false, 30000);
 
-    // 通信に失敗したらリカバリ
-    if (ret < 0) {
-      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-    }
+//    // 通信に失敗したらリカバリ
+//    if (ret < 0) {
+//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+//    }
 }
 
 void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
 
     uint8_t command[] = { reg };
 
-    // バスがビジーならリカバリ
-    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
-      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-    }
+//    // バスがビジーならリカバリ
+//    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
+//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+//    }
 
     int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 1, true, 30000);
 
-    // 通信に失敗したらリカバリ
-    if (ret < 0) {
-      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-      return;
-    }
+//    // 通信に失敗したらリカバリ
+//    if (ret < 0) {
+//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+//      return;
+//    }
 
     ret = i2c_read_timeout_us(i2c0, IOEXP_ADDR, retval, 1, false, 30000);
 
-    // 通信に失敗したらリカバリ
-    if (ret < 0) {
-      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-    }
+//    // 通信に失敗したらリカバリ
+//    if (ret < 0) {
+//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+//    }
 }
 
 void ioexp_current_chr_buf_write(uint8_t chr) {
