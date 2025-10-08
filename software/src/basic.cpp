@@ -43,7 +43,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.13.0"
+#define STR_VERSION "1.13.1"
 
 // Terminal control
 #define c_putch(c) putch2(c)
