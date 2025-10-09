@@ -2136,6 +2136,7 @@ unsigned char* iexe() {
     if (c_kbhit()) //もし未読文字があったら
       if (c_getch() == 27) { //読み込んでもし［ESC］キーだったら
         err = ERR_ESC; //エラー番号をセット
+        lcd_start_disp_cursor();
         break; //打ち切る
       }
 
@@ -3069,6 +3070,7 @@ void icom() {
 
   case I_RUN: //I_RUNの場合（RUN命令）
     cip++; //中間コードポインタを次へ進める
+    lcd_end_disp_cursor(); // カーソル非表示
     irun(); //RUN命令を実行
     break; //打ち切る
 
