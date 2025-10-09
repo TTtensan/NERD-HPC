@@ -1778,8 +1778,8 @@ void igline() {
     color = iexp();
     if(err) return;
 
-    if(color) lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, black);
-    else lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, white);
+    if(color) lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, black, graphic);
+    else lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, white, graphic);
 }
 
 void igrect() {
@@ -1803,8 +1803,8 @@ void igrect() {
     fill = iexp();
     if(err) return;
 
-    if(color) lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, black, fill);
-    else lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, white, fill);
+    if(color) lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, black, fill, graphic);
+    else lcd_rect(x_pos0, y_pos0, x_pos1, y_pos1, white, fill, graphic);
 }
 
 void igcircle() {
@@ -1825,8 +1825,8 @@ void igcircle() {
     fill = iexp();
     if(err) return;
 
-    if(color) lcd_circle(x_pos, y_pos, radius, black, fill);
-    else lcd_circle(x_pos, y_pos, radius, white, fill);
+    if(color) lcd_circle(x_pos, y_pos, radius, black, fill, graphic);
+    else lcd_circle(x_pos, y_pos, radius, white, fill, graphic);
 }
 
 void igplaynm() {
@@ -1934,8 +1934,8 @@ void igtri() {
     fill = iexp();
     if(err) return;
 
-    if(color) lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, black, fill);
-    else lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, white, fill);
+    if(color) lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, black, fill, graphic);
+    else lcd_triangle(x_pos0, y_pos0, x_pos1, y_pos1, x_pos2, y_pos2, white, fill, graphic);
 }
 #endif
 

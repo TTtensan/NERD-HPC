@@ -245,7 +245,7 @@ void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc){
 
 // ブレゼンハムのアルゴリズム
 // x_pos0,x_pos1(0~127), y_pos0,y_pos1(0~47), cl(white,black)
-void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl){
+void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, screen sc){
 
     int16_t tmp; // x,yの値入れ替え用
     int16_t delta_x, delta_y;
@@ -280,9 +280,9 @@ void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, co
 
     for(x=x_pos0; x<=x_pos1; x++){ // 次の点が直線の上にあるのか下にあるのか判定して点を打つ
         if(steep){
-            lcd_pset(y, x, cl, graphic);
+            lcd_pset(y, x, cl, sc);
         } else {
-            lcd_pset(x, y, cl, graphic);
+            lcd_pset(x, y, cl, sc);
         }
         error += delta_y;
         if((error << 1) >= delta_x){ // この式が成り立てば、次の点はy_step分移動する
@@ -293,32 +293,32 @@ void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, co
 
 }
 
-void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, bool fill){
+void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, bool fill, screen sc){
 
     if(fill){
         if(y_pos1 >= y_pos0){
             for(int16_t i=y_pos0; i<=y_pos1; i++){
-                lcd_line(x_pos0, i, x_pos1, i, cl);
+                lcd_line(x_pos0, i, x_pos1, i, cl, sc);
             }
         } else {
             for(uint8_t i=y_pos1; i<=y_pos0; i++){
-                lcd_line(x_pos0, i, x_pos1, i, cl);
+                lcd_line(x_pos0, i, x_pos1, i, cl, sc);
             }
         }
     } else {
-        lcd_line(x_pos0, y_pos0, x_pos1, y_pos0, cl);
-        lcd_line(x_pos0, y_pos0, x_pos0, y_pos1, cl);
-        lcd_line(x_pos1, y_pos0, x_pos1, y_pos1, cl);
-        lcd_line(x_pos0, y_pos1, x_pos1, y_pos1, cl);
+        lcd_line(x_pos0, y_pos0, x_pos1, y_pos0, cl, sc);
+        lcd_line(x_pos0, y_pos0, x_pos0, y_pos1, cl, sc);
+        lcd_line(x_pos1, y_pos0, x_pos1, y_pos1, cl, sc);
+        lcd_line(x_pos0, y_pos1, x_pos1, y_pos1, cl, sc);
     }
 }
 
-void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, int16_t x_pos2, int16_t y_pos2, color cl, bool fill) {
+void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, int16_t x_pos2, int16_t y_pos2, color cl, bool fill, screen sc) {
   if(fill) {
 
     // 全ての座標が同じ場合
     if (x_pos0 == x_pos1 && x_pos1 == x_pos2 && y_pos0 == y_pos1 && y_pos1 == y_pos2) {
-      lcd_pset(x_pos0, y_pos0, cl, graphic); // 1ドットだけ描く
+      lcd_pset(x_pos0, y_pos0, cl, sc); // 1ドットだけ描く
       return;
     }
 
@@ -332,8 +332,8 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
     if (area2 == 0) {
       // 面積ゼロなので退化三角形
       // → 線分か点として描画
-      lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl);
-      lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl);
+      lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl, sc);
+      lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl, sc);
       return;
     }
 
@@ -348,7 +348,7 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
 
     // 上半分 (y_pos0 → y_pos1)
     for (int16_t y = y_pos0; y <= y_pos1; y++) {
-      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl, sc);
       sx += dx13;
       ex += dx12;
     }
@@ -357,36 +357,36 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
 
     // 下半分 (y_pos1 → y_pos2)
     for (int16_t y = y_pos1; y <= y_pos2; y++) {
-      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl, sc);
       sx += dx13;
       ex += dx23;
     }
   } else {
-    lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl);
-    lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl);
-    lcd_line(x_pos2, y_pos2, x_pos0, y_pos0, cl);
+    lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl, sc);
+    lcd_line(x_pos1, y_pos1, x_pos2, y_pos2, cl, sc);
+    lcd_line(x_pos2, y_pos2, x_pos0, y_pos0, cl, sc);
   }
 }
 
-void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill){
+void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill, screen sc){
 
     int x = rad;
     int y = 0;
     int F = -2 * rad + 3;
     while(x >= y){
-        lcd_pset(x_pos+x, y_pos+y, cl, graphic);
-        lcd_pset(x_pos-x, y_pos+y, cl, graphic);
-        lcd_pset(x_pos+x, y_pos-y, cl, graphic);
-        lcd_pset(x_pos-x, y_pos-y, cl, graphic);
-        lcd_pset(x_pos+y, y_pos+x, cl, graphic);
-        lcd_pset(x_pos-y, y_pos+x, cl, graphic);
-        lcd_pset(x_pos+y, y_pos-x, cl, graphic);
-        lcd_pset(x_pos-y, y_pos-x, cl, graphic);
+        lcd_pset(x_pos+x, y_pos+y, cl, sc);
+        lcd_pset(x_pos-x, y_pos+y, cl, sc);
+        lcd_pset(x_pos+x, y_pos-y, cl, sc);
+        lcd_pset(x_pos-x, y_pos-y, cl, sc);
+        lcd_pset(x_pos+y, y_pos+x, cl, sc);
+        lcd_pset(x_pos-y, y_pos+x, cl, sc);
+        lcd_pset(x_pos+y, y_pos-x, cl, sc);
+        lcd_pset(x_pos-y, y_pos-x, cl, sc);
         if(fill){
-            lcd_line(x_pos-x, y_pos+y, x_pos+x, y_pos+y, cl);
-            lcd_line(x_pos-x, y_pos-y, x_pos+x, y_pos-y, cl);
-            lcd_line(x_pos-y, y_pos+x, x_pos+y, y_pos+x, cl);
-            lcd_line(x_pos-y, y_pos-x, x_pos+y, y_pos-x, cl);
+            lcd_line(x_pos-x, y_pos+y, x_pos+x, y_pos+y, cl, sc);
+            lcd_line(x_pos-x, y_pos-y, x_pos+x, y_pos-y, cl, sc);
+            lcd_line(x_pos-y, y_pos+x, x_pos+y, y_pos+x, cl, sc);
+            lcd_line(x_pos-y, y_pos-x, x_pos+y, y_pos-x, cl, sc);
         }
         if(F >= 0){
             x--;
