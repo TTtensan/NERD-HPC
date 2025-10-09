@@ -64,6 +64,10 @@ void lcd_disp_cursor();
 void lcd_hide_cursor();
 void lcd_start_disp_cursor();
 void lcd_end_disp_cursor();
+void lcd_reset_cursor_count();
+void lcd_add_prompt_input_count();
+void lcd_sub_prompt_input_count();
+void lcd_back_cursor();
 
 bool repeating_timer_callback(struct repeating_timer *t);
 void lcd_start_disp_vbuf_timer();

@@ -31,6 +31,12 @@ uint8_t c_code_prev = '0';
 volatile bool flg_disp_cursor = false;
 volatile unsigned long frame_count_for_cursor = 0;
 
+// カーソルが戻った回数
+uint8_t cursor_back_count = 0;
+
+// 現在入力している文字数
+uint8_t prompt_input_count = 0;
+
 void lcd_init(){
 
     // リセット
@@ -682,6 +688,50 @@ void lcd_end_disp_cursor() {
 
   flg_disp_cursor = false;
   lcd_hide_cursor();
+
+}
+
+// 入力文字数、カーソルの戻った回数をリセットする
+void lcd_reset_cursor_count() {
+
+  cursor_back_count = 0;
+  prompt_input_count = 0;
+
+}
+
+// 入力した文字数カウントを増やす
+void lcd_add_prompt_input_count() {
+
+  prompt_input_count++;
+
+}
+
+// 入力した文字数カウントを減らす
+void lcd_sub_prompt_input_count() {
+
+  prompt_input_count--;
+
+}
+
+// カーソル位置を1つ戻す
+void lcd_back_cursor() {
+
+  // プロンプトの先頭位置なら戻らない
+  if((prompt_input_count - cursor_back_count) == 0) return;
+
+  // カーソル位置が先頭にある場合、一行上に戻る
+  if(x_cursor == 0) {
+
+    x_cursor = 20;
+    y_cursor--;
+    cursor_back_count++;
+
+  } else {
+
+    x_cursor--;
+    cursor_back_count++;
+
+  }
 
 }
 

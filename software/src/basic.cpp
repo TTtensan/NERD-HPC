@@ -400,15 +400,29 @@ void c_gets() {
   len = 0; //文字数をクリア
   while ((c = c_getch()) != KEY_ENTER) { //改行でなければ繰り返す
     if (c == 9) c = ' '; //［Tab］キーは空白に置き換える
+
+    // エスケープシーケンスの処理
+    if(false);
+
+    // 左矢印キーの処理
+    if(c == 250) {
+
+      lcd_back_cursor();
+
     //［BackSpace］キーが押された場合の処理（行頭ではないこと）
-    if (((c == 8) || (c == 127)) && (len > 0)) {
+    } else if (((c == 8) || (c == 127)) && (len > 0)) {
+
       len--; //文字数を1減らす
       c_putch(8); c_putch(' '); c_putch(8); //文字を消す
-    } else
+      lcd_sub_prompt_input_count(); // 入力文字数のカウントを減らす
+
     //表示可能な文字が入力された場合の処理（バッファのサイズを超えないこと）
-    if (c_isprint(c) && (len < (SIZE_LINE - 1))) {
+    } else if (c_isprint(c) && (len < (SIZE_LINE - 1))) {
+
       lbuf[len++] = c; //バッファへ入れて文字数を1増やす
       c_putch(c); //表示
+      lcd_add_prompt_input_count(); // 入力文字数のカウントを増やす
+
     }
 
     lcd_start_disp_cursor(); // カーソル表示開始
@@ -3158,6 +3172,7 @@ void basic() {
   //端末から1行を入力して実行
   while (1) { //無限ループ
     c_putch('>'); //プロンプトを表示
+    lcd_reset_cursor_count(); // カーソル移動処理用にプロンプトの入力文字数をカーソルが戻った回数をリセット
     c_gets(); //1行を入力
 
     //1行の文字列を中間コードの並びに変換
