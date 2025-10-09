@@ -702,23 +702,29 @@ bool lcd_pget(int16_t x_pos, int16_t y_pos) {
 
 bool repeating_timer_callback(struct repeating_timer *t) {
 
-    lcd_disp_vbuf();
+  lcd_disp_vbuf();
 
-    current_frame++;
+  current_frame++;
 
-    frame_count_for_cursor++;
-    if(flg_disp_cursor) {
-      if(frame_count_for_cursor <= 30) {
-        lcd_cls(white, info);
-        lcd_disp_cursor();
-      } else if(frame_count_for_cursor <= 60) {
-        lcd_hide_cursor();
-      } else {
-        lcd_reset_cursor_timer();
-      }
+  frame_count_for_cursor++;
+
+  if(flg_disp_cursor) {
+
+    if(frame_count_for_cursor <= 30) { // カーソル表示
+
+      lcd_disp_cursor();
+
+    } else if(frame_count_for_cursor <= 60) { // カーソル非表示
+      lcd_hide_cursor();
+
+    } else { // タイマーリセット
+
+      lcd_reset_cursor_timer();
+
     }
+  }
 
-    return true;
+  return true;
 
 }
 
