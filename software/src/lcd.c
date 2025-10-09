@@ -660,6 +660,9 @@ void lcd_reset_cursor_timer() {
 }
 
 void lcd_disp_cursor() {
+
+  lcd_rect(2+x_cursor*6, y_cursor*8, 2+x_cursor*6+4, y_cursor*8+6, black, true, info);
+
 }
 
 void lcd_hide_cursor() {
@@ -712,10 +715,10 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
     if(frame_count_for_cursor <= 30) { // カーソル表示
 
-      lcd_disp_cursor();
+      lcd_hide_cursor();
 
     } else if(frame_count_for_cursor <= 60) { // カーソル非表示
-      lcd_hide_cursor();
+      lcd_disp_cursor();
 
     } else { // タイマーリセット
 

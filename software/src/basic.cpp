@@ -410,6 +410,9 @@ void c_gets() {
       lbuf[len++] = c; //バッファへ入れて文字数を1増やす
       c_putch(c); //表示
     }
+
+    lcd_start_disp_cursor(); // カーソル表示開始
+
   }
   newline(); //改行
   lbuf[len] = 0; //終端を置く
@@ -3144,6 +3147,7 @@ void basic() {
   c_puts(STR_VERSION);
   newline(); //改行
   error(); //「OK」またはエラーメッセージを表示してエラー番号をクリア
+  lcd_start_disp_cursor(); // カーソル表示開始
 
   // SWが押されていなければAUTORUN.TXTを実行する
   if(gpio_get(PIN_SW)) autorun();
