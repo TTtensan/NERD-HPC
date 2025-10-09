@@ -713,6 +713,27 @@ void lcd_sub_prompt_input_count() {
 
 }
 
+void lcd_forward_cursor() {
+
+  // プロンプトの最後尾なら進まない
+  if(cursor_back_count == 0) return;
+
+  // カーソル位置が右端にある場合、一行下に進む
+  if(x_cursor == 20) {
+
+    x_cursor = 0;
+    y_cursor++;
+    cursor_back_count--;
+
+  } else {
+
+    x_cursor++;
+    cursor_back_count--;
+
+  }
+
+}
+
 // カーソル位置を1つ戻す
 void lcd_back_cursor() {
 

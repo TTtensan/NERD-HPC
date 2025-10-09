@@ -67,6 +67,7 @@ void lcd_end_disp_cursor();
 void lcd_reset_cursor_count();
 void lcd_add_prompt_input_count();
 void lcd_sub_prompt_input_count();
+void lcd_forward_cursor();
 void lcd_back_cursor();
 
 bool repeating_timer_callback(struct repeating_timer *t);

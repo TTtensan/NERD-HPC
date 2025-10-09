@@ -404,8 +404,13 @@ void c_gets() {
     // エスケープシーケンスの処理
     if(false);
 
+    // 右矢印キーの処理
+    if (c == 249) {
+
+      lcd_forward_cursor();
+
     // 左矢印キーの処理
-    if(c == 250) {
+    } else if (c == 250) {
 
       lcd_back_cursor();
 
