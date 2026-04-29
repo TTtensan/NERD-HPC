@@ -81,6 +81,8 @@ short getrnd(short value) {
 // Prototypes (necessity minimum)
 short iexp(void);
 void iload();
+void insert_lbuf(uint8_t index, char c);
+void print_lbuf(uint8_t index, unsigned char len);
 
 // Keyword table
 const char *kwtbl[] = {
@@ -407,7 +409,7 @@ void c_gets() {
     // 右矢印キーの処理
     if (c == 249) {
 
-      lcd_forward_cursor();
+      lcd_forward_cursor(false);
 
     // 左矢印キーの処理
     } else if (c == 250) {
@@ -424,9 +426,24 @@ void c_gets() {
     //表示可能な文字が入力された場合の処理（バッファのサイズを超えないこと）
     } else if (c_isprint(c) && (len < (SIZE_LINE - 1))) {
 
-      lbuf[len++] = c; //バッファへ入れて文字数を1増やす
-      c_putch(c); //表示
-      lcd_add_prompt_input_count(); // 入力文字数のカウントを増やす
+      // 文字列が挿入された場合
+      if (lcd_get_cursor_back_count() != 0) {
+
+        uint8_t insert_position = lcd_get_prompt_input_count()-lcd_get_cursor_back_count();
+        insert_lbuf(insert_position, c);
+        len++;
+        print_lbuf(insert_position, len);
+        lcd_forward_cursor(true);
+        lcd_add_prompt_input_count(); // 入力文字数のカウントを増やす
+
+      // 末尾に追加された場合
+      } else {
+
+        lbuf[len++] = c; //バッファへ入れて文字数を1増やす
+        c_putch(c); //表示
+        lcd_add_prompt_input_count(); // 入力文字数のカウントを増やす
+
+      }
 
     }
 
@@ -440,6 +457,30 @@ void c_gets() {
     while (c_isspace(lbuf[--len])); //末尾の空白を戻る
     lbuf[++len] = 0; //終端を置く
   }
+}
+
+// lbufのindexの位置に文字を挿入する
+void insert_lbuf(uint8_t index, char c) {
+  
+  // indexの位置以降をずらす
+  for(int i=SIZE_LINE-1; i>index; i--) lbuf[i] = lbuf[i-1];
+
+  // indexの位置に文字を挿入
+  lbuf[index] = c;
+
+}
+
+// カーソル位置からlbufのindexの位置以降を表示する
+void print_lbuf(uint8_t index, unsigned char len) {
+
+  // c_putchするとカーソル位置が動くのでカーソル位置を保存
+  lcd_save_cursor_position();
+
+  for(int i=index; i<len; i++) c_putch(lbuf[i]);
+
+  // カーソル位置を復元
+  lcd_load_cursor_position();
+
 }
 
 // Print numeric specified columns

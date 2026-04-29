@@ -24,6 +24,8 @@ volatile bool flg_vsync = false;
 
 static uint8_t x_cursor = 0;
 static uint8_t y_cursor = 0;
+static uint8_t x_cursor_tmp = 0;
+static uint8_t y_cursor_tmp = 0;
 static uint8_t count_candel = 0; // print_c_autoでdelが来た際に文字が何個消去できるかのカウント
 
 uint8_t c_code_prev = '0';
@@ -659,6 +661,20 @@ short lcd_scr(uint8_t x_pos, uint8_t y_pos) {
 
 }
 
+void lcd_save_cursor_position() {
+
+  x_cursor_tmp = x_cursor;
+  y_cursor_tmp = y_cursor;
+
+}
+
+void lcd_load_cursor_position() {
+
+  x_cursor = x_cursor_tmp;
+  y_cursor = y_cursor_tmp;
+
+}
+
 void lcd_reset_cursor_timer() {
 
   frame_count_for_cursor = 0;
@@ -681,6 +697,18 @@ void lcd_start_disp_cursor() {
 
   lcd_reset_cursor_timer();
   flg_disp_cursor = true;
+
+}
+
+uint8_t lcd_get_cursor_back_count() {
+
+  return cursor_back_count;
+
+}
+
+uint8_t lcd_get_prompt_input_count() {
+
+  return prompt_input_count;
 
 }
 
@@ -713,7 +741,7 @@ void lcd_sub_prompt_input_count() {
 
 }
 
-void lcd_forward_cursor() {
+void lcd_forward_cursor(bool inserted) {
 
   // プロンプトの最後尾なら進まない
   if(cursor_back_count == 0) return;
@@ -723,12 +751,12 @@ void lcd_forward_cursor() {
 
     x_cursor = 0;
     y_cursor++;
-    cursor_back_count--;
+    if(!inserted) cursor_back_count--;
 
   } else {
 
     x_cursor++;
-    cursor_back_count--;
+    if(!inserted) cursor_back_count--;
 
   }
 
