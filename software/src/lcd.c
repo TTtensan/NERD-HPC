@@ -106,11 +106,12 @@ void lcd_cls(color cl, screen sc){
         }
     }
 
-    if(sc == text) lcd_set_cursor(0, 0);
-
-    for(int i=0; i<8; i++) {
-      for(int j=0; j<21; j++) {
-        scr_buf[i][j] = 0;
+    if(sc == text){
+      lcd_set_cursor(0, 0);
+      for(int i=0; i<8; i++) {
+        for(int j=0; j<21; j++) {
+          scr_buf[i][j] = 0;
+        }
       }
     }
 
