@@ -1,4 +1,4 @@
-# NERD-HPC
+# [NERD-HPC](https://github.com/TTtensan/NERD-HPC)
 
 ## アップデート方法
 1. 本体とPCをUSBで接続する。
