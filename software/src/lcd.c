@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "lcd.h"
 #include "pin.h"
@@ -339,7 +340,7 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
 
     // 上半分 (y_pos0 → y_pos1)
     for (int16_t y = y_pos0; y <= y_pos1; y++) {
-      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      lcd_line((int16_t)lroundf(sx), y, (int16_t)lroundf(ex), y, cl);
       sx += dx13;
       ex += dx12;
     }
@@ -348,7 +349,7 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
 
     // 下半分 (y_pos1 → y_pos2)
     for (int16_t y = y_pos1; y <= y_pos2; y++) {
-      lcd_line((int16_t)sx, y, (int16_t)ex, y, cl);
+      lcd_line((int16_t)lroundf(sx), y, (int16_t)lroundf(ex), y, cl);
       sx += dx13;
       ex += dx23;
     }
