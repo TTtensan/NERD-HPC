@@ -330,28 +330,24 @@ void lcd_triangle(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1
     }
 
 
-    // 各辺の傾き
+    // 長辺 (y_pos0 → y_pos2) の傾き
     float dx13 = (float)(x_pos2 - x_pos0) / (y_pos2 - y_pos0);
-    float dx12 = (float)(x_pos1 - x_pos0) / (y_pos1 - y_pos0);
-    float dx23 = (float)(x_pos2 - x_pos1) / (y_pos2 - y_pos1);
 
-    float sx = (float)x_pos0;
-    float ex = (float)x_pos0;
-
-    // 上半分 (y_pos0 → y_pos1)
-    for (int16_t y = y_pos0; y <= y_pos1; y++) {
+    // 各スキャンラインで辺のxを頂点から再計算する
+    // (累積加算による1行分のずれ・平坦辺でのゼロ除算を避ける)
+    for (int16_t y = y_pos0; y <= y_pos2; y++) {
+      float sx = (float)x_pos0 + dx13 * (y - y_pos0); // 長辺側
+      float ex;                                       // もう一方の辺側
+      if (y < y_pos1) {
+        // 上半分の辺 (y_pos0 → y_pos1)
+        ex = (float)x_pos0 + (float)(x_pos1 - x_pos0) * (y - y_pos0) / (y_pos1 - y_pos0);
+      } else if (y_pos2 != y_pos1) {
+        // 下半分の辺 (y_pos1 → y_pos2)
+        ex = (float)x_pos1 + (float)(x_pos2 - x_pos1) * (y - y_pos1) / (y_pos2 - y_pos1);
+      } else {
+        ex = (float)x_pos1;
+      }
       lcd_line((int16_t)lroundf(sx), y, (int16_t)lroundf(ex), y, cl);
-      sx += dx13;
-      ex += dx12;
-    }
-
-    ex = (float)x_pos1;
-
-    // 下半分 (y_pos1 → y_pos2)
-    for (int16_t y = y_pos1; y <= y_pos2; y++) {
-      lcd_line((int16_t)lroundf(sx), y, (int16_t)lroundf(ex), y, cl);
-      sx += dx13;
-      ex += dx23;
     }
   } else {
     lcd_line(x_pos0, y_pos0, x_pos1, y_pos1, cl);
