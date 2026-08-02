@@ -1,13 +1,34 @@
 #include <stdio.h>
+#include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "pin.h"
 #include "ioexp.h"
 
-static struct repeating_timer ioexp_timer;
+// 次にキースキャンを行う時刻[us]。
+// get_absolute_time()は64bitタイマをTIMELR->TIMEHRの順に読む
+// (桁上がり対策のリトライループ付き) ので1回30〜50サイクルかかる。
+// ioexp_task()はBASICの中間コード1個ごとに呼ばれるため、
+// TIMERAWLを1回読むだけのtime_us_32()を使う。
+// 32bitは約71分でラップするが、符号付きの差で比較すれば正しく判定できる
+static uint32_t ioexp_next_scan = 0;
+// キースキャンの一時停止フラグ (ioexp_getkey中にスキャンが割り込まないようにする)
+static volatile bool ioexp_scan_enable = false;
+// I2Cに失敗した。次のioexp_task()で復旧を試みる
+static volatile bool ioexp_need_recover = false;
+// 何回スキャンしたら設定レジスタの健全性を確認するかのカウンタ
+static uint16_t ioexp_health_count = 0;
+// 全てのキーがリリース済みで、かつその状態が確定していることが分かっている。
+// このときは8列スキャンを省略できる
+static bool ioexp_all_released = false;
+
+static void ioexp_recover();
+static bool ioexp_is_healthy();
 
 // 前回スキャン時のキーの押下情報 1ビットで記録 0=押下 1=リリース
 volatile uint8_t prev_keyinfo[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+// デバウンス用。前回スキャンの生の読み値。2回連続で一致して初めて確定させる
+static uint8_t sample_keyinfo[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 volatile uint8_t current_chr_buf[IOEXP_CHRBUF] = { 0x00 };
 // 読み出し位置のポインタ
 volatile uint8_t current_chr_buf_rp = 0;
@@ -120,86 +141,109 @@ char ioexp_bl2tl(char code) {
     return code;
 }
 
-static void i2c_bus_recover(uint sda_pin, uint scl_pin) {
+// I2Cはオープンドレインのバスなので、Lowは「出力にして0を出す」、
+// Highは「入力に戻してプルアップに任せる」で作る。
+// 旧実装は gpio_set_dir(OUT) + gpio_put(1) でHighを能動的に driveしていた。
+// これだとMCU側とMCP23017側が同時にバスをdriveして衝突し、
+// 中途半端なビットがMCP23017に書き込まれてレジスタが化ける。
+// これが「リカバリすると意図しないキー入力が出る」原因だった。
+#define IOEXP_BUS_LOW(pin)     gpio_set_dir((pin), GPIO_OUT)
+#define IOEXP_BUS_RELEASE(pin) gpio_set_dir((pin), GPIO_IN)
+
+static bool i2c_bus_recover(uint sda_pin, uint scl_pin) {
+
+    // 出力値は常にLow固定。開放はdirで行うのでgpio_put(1)は絶対にしない
+    gpio_put(sda_pin, 0);
+    gpio_put(scl_pin, 0);
+    IOEXP_BUS_RELEASE(sda_pin);
+    IOEXP_BUS_RELEASE(scl_pin);
+
     // I2C を GPIO に切り替え
     gpio_set_function(sda_pin, GPIO_FUNC_SIO);
     gpio_set_function(scl_pin, GPIO_FUNC_SIO);
     gpio_pull_up(sda_pin);
     gpio_pull_up(scl_pin);
-    gpio_set_dir(scl_pin, true);
-    gpio_set_dir(sda_pin, true);
 
-    // SDA が Low のままならクロックを送って解放
+    // SDA が Low のままならクロックを送ってスレーブに残りのビットを吐かせる
     for (int i = 0; i < 9; i++) {
         if (gpio_get(sda_pin)) break; // SDA が High ならOK
-        gpio_put(scl_pin, 0);
-        sleep_us(5);
-        gpio_put(scl_pin, 1);
-        sleep_us(5);
+        IOEXP_BUS_LOW(scl_pin);
+        sleep_us(10);
+        IOEXP_BUS_RELEASE(scl_pin);
+        sleep_us(10);
     }
 
-    // STOP コンディションを生成
-    gpio_put(scl_pin, 1);
-    sleep_us(5);
-    gpio_put(sda_pin, 1);
-    sleep_us(5);
+    // STOP コンディションを生成 (SCLがHighの間にSDAをLow->High)
+    IOEXP_BUS_LOW(sda_pin);
+    sleep_us(10);
+    IOEXP_BUS_RELEASE(scl_pin);
+    sleep_us(10);
+    IOEXP_BUS_RELEASE(sda_pin);
+    sleep_us(10);
+
+    bool bus_free = gpio_get(sda_pin) && gpio_get(scl_pin);
 
     // I2C 機能に戻す
+    i2c_init(i2c0, I2C0_BAUDRATE); // 再初期化
     gpio_set_function(sda_pin, GPIO_FUNC_I2C);
     gpio_set_function(scl_pin, GPIO_FUNC_I2C);
 
-    i2c_init(i2c0, I2C0_BAUDRATE); // 再初期化
+    return bus_free;
 }
 
-void ioexp_write_register(uint8_t reg, uint8_t value) {
+// 通信に失敗しても、その場ではリカバリしない。
+// 「その回のスキャンを捨てて」フラグだけ立て、復旧は ioexp_task() が
+// スキャンの境界で行う。転送の途中で状態を作り替えないことと、
+// 復旧後に必ずキー状態を取り直すことで、ゴーストキーの発生を防ぐ。
+// 戻り値: 0 = 成功, -1 = 失敗
+
+int ioexp_write_register(uint8_t reg, uint8_t value) {
 
     uint8_t command[] = { reg, value };
 
-//    // バスがビジーならリカバリ
-//    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
-//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-//    }
+    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 2, false, IOEXP_I2C_TIMEOUT_US);
+    if (ret != 2) {
+        ioexp_need_recover = true;
+        return -1;
+    }
 
-    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 2, false, 30000);
-
-//    // 通信に失敗したらリカバリ
-//    if (ret < 0) {
-//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-//    }
+    return 0;
 }
 
-void ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
+int ioexp_read_register(uint8_t reg, uint8_t retval[1]) {
 
     uint8_t command[] = { reg };
 
-//    // バスがビジーならリカバリ
-//    if (i2c_get_hw(i2c0)->status & I2C_IC_STATUS_ACTIVITY_BITS) {
-//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-//    }
+    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 1, true, IOEXP_I2C_TIMEOUT_US);
+    if (ret != 1) {
+        ioexp_need_recover = true;
+        return -1;
+    }
 
-    int ret = i2c_write_timeout_us(i2c0, IOEXP_ADDR, command, 1, true, 30000);
+    ret = i2c_read_timeout_us(i2c0, IOEXP_ADDR, retval, 1, false, IOEXP_I2C_TIMEOUT_US);
+    if (ret != 1) {
+        ioexp_need_recover = true;
+        return -1;
+    }
 
-//    // 通信に失敗したらリカバリ
-//    if (ret < 0) {
-//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-//      return;
-//    }
-
-    ret = i2c_read_timeout_us(i2c0, IOEXP_ADDR, retval, 1, false, 30000);
-
-//    // 通信に失敗したらリカバリ
-//    if (ret < 0) {
-//      i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
-//    }
+    return 0;
 }
 
 void ioexp_current_chr_buf_write(uint8_t chr) {
 
-  current_chr_buf[current_chr_buf_wp] = chr;
-  current_chr_buf_wp++;
-
   // リングバッファの最後尾に到達すると冒頭にポインタを移動
-  if(current_chr_buf_wp == IOEXP_CHRBUF) current_chr_buf_wp = 0;
+  uint8_t next_wp = current_chr_buf_wp + 1;
+  if(next_wp == IOEXP_CHRBUF) next_wp = 0;
+
+  // 満杯なら捨てる。
+  // ここで捨てないと wp が rp を追い越し、
+  // wp == rp すなわちバッファが空の状態になって
+  // 溜まっていた入力が全て消える
+  if(next_wp == current_chr_buf_rp) return;
+
+  // wpを進める前に中身を書く (読み出し側から見て中途半端な状態を作らない)
+  current_chr_buf[current_chr_buf_wp] = chr;
+  current_chr_buf_wp = next_wp;
 }
 
 uint8_t ioexp_current_chr_buf_read() {
@@ -216,31 +260,61 @@ uint8_t ioexp_current_chr_buf_read() {
 }
 
 char ioexp_getchr() {
-    while(current_chr_buf_wp == current_chr_buf_rp);
+    // バッファが空の間もスキャンを回し続ける。
+    // ここで単純にスピンすると、スキャンが止まった瞬間に永久に抜けられなくなる
+    while(current_chr_buf_wp == current_chr_buf_rp) ioexp_task();
     return ioexp_current_chr_buf_read();
 }
 
 uint32_t ioexp_getchr_available() {
+    ioexp_task();
     if(current_chr_buf_wp != current_chr_buf_rp) return 1;
     else return 0;
 }
 
-void ioexp_stop_keyscan_timer() {
+// キースキャンの本体。
+// 以前はrepeating_timerのコールバック (= 割り込みコンテキスト) から
+// ioexp_getchrinfo() を直接呼んでいたが、1回のスキャンでI2Cを16回叩くため、
+// バスが不調になると割り込みの中でCPUを数百ms占有して端末全体が固まっていた。
+// 現在は割り込みを使わず、メインループから呼ばれたときだけスキャンする。
+void ioexp_task() {
 
-    cancel_repeating_timer(&ioexp_timer);
+    if(!ioexp_scan_enable) return;
+
+    // 前回のスキャンからIOEXP_SCAN_INTERVAL_MS経っていなければ何もしない
+    if((int32_t)(time_us_32() - ioexp_next_scan) < 0) return;
+    ioexp_next_scan = time_us_32() + IOEXP_SCAN_INTERVAL_MS * 1000;
+
+    // 前回のスキャンでI2Cに失敗していたら、まず復旧を試みる
+    if(ioexp_need_recover) {
+        ioexp_recover();
+        return;
+    }
+
+    // 定期的にMCP23017の設定が生きているか確認する。
+    // I2Cはエラーを返さないのにキーだけ効かなくなる状態から復帰するため
+    if(++ioexp_health_count >= IOEXP_HEALTH_CHECK_SCANS) {
+        ioexp_health_count = 0;
+        if(!ioexp_is_healthy()) {
+            ioexp_recover();
+            return;
+        }
+    }
+
+    ioexp_getchrinfo();
 
 }
 
-bool ioexp_repeating_timer_callback(struct repeating_timer *t) {
+void ioexp_stop_keyscan_timer() {
 
-    ioexp_getchrinfo();
-    return true;
+    ioexp_scan_enable = false;
 
 }
 
 void ioexp_start_keyscan_timer() {
 
-    add_repeating_timer_ms(50, ioexp_repeating_timer_callback, NULL, &ioexp_timer);
+    ioexp_next_scan = time_us_32();
+    ioexp_scan_enable = true;
 
 }
 
@@ -258,9 +332,10 @@ void ioexp_gpio_callback(uint gpio, uint32_t events) {
 
     if (events & GPIO_IRQ_EDGE_FALL) {
 
-      ioexp_reset_inta();
-      ioexp_stop_keyscan_timer();
-      ioexp_start_keyscan_timer();
+      // 割り込みコンテキストなのでI2Cは絶対に叩かない。
+      // 次のioexp_task()を即座に実行させるだけにする。
+      // INTAのクリア (GPIOAの読み出し) はスキャン側で行われる
+      ioexp_next_scan = time_us_32();
 
     }
 
@@ -298,13 +373,20 @@ void ioexp_stop_keyscan_interrupt() {
 }
 
 
-void ioexp_init() {
-    
-    // リセット
+// MCP23017をハードウェアリセットする。
+// バスがスレーブ側でLowに固着している場合も、これで確実に解放される
+static void ioexp_hard_reset() {
+
     gpio_put(PIN_IOEXP_RST, 0);
-    sleep_ms(60);
+    sleep_ms(10);
     gpio_put(PIN_IOEXP_RST, 1);
-    sleep_ms(60);
+    sleep_ms(10);
+
+}
+
+// MCP23017の設定レジスタを書き込む。
+// 初期化時だけでなく、外乱でレジスタが化けた場合の復旧でも使う
+static void ioexp_config_registers() {
 
     // 出力初期値を設定
     // 1 = High, 0 = Low
@@ -329,7 +411,70 @@ void ioexp_init() {
     // Aピンの割り込みを許可する
     ioexp_write_register(IOEXP_GPINTENA, 0b11111111);
 
-    // タイマー割り込みの有効化
+}
+
+// 今のキーマトリクスの状態を読んで、差分判定の基準を作り直す。
+// 押下/リリースのイベントは一切生成しない。
+// 復旧の直後にこれをやらないと、復旧前後の状態差が全部
+// キー入力として吐き出されてしまう
+static void ioexp_resync_keyinfo() {
+
+    // 読めなかった列があるかもしれないので、
+    // 一旦「省略できない」側に倒しておく
+    ioexp_all_released = false;
+
+    for(int i=0; i<8; i++) {
+
+        uint8_t offbit = ~(0b00000001 << i);
+        if(ioexp_write_register(IOEXP_OLATB, offbit) < 0) continue;
+        uint8_t current_keyinfo[1] = { 0xff };
+        if(ioexp_read_register(IOEXP_GPIOA, current_keyinfo) < 0) continue;
+
+        prev_keyinfo[i] = current_keyinfo[0];
+        sample_keyinfo[i] = current_keyinfo[0];
+
+    }
+
+}
+
+// I2Cが失敗した、または設定レジスタが化けていたときの復旧処理。
+// バス解放 -> ハードリセット -> 設定書き直し -> キー状態の取り直し
+static void ioexp_recover() {
+
+    ioexp_need_recover = false;
+
+    i2c_bus_recover(PIN_IOEXP_SDA, PIN_IOEXP_SCL);
+    ioexp_hard_reset();
+    ioexp_config_registers();
+
+    // ここで失敗したなら復旧できていない。次のスキャンでまた試す
+    if(ioexp_need_recover) return;
+
+    ioexp_resync_keyinfo();
+
+}
+
+// MCP23017の設定が生きているか確認する。
+// RSTピンやI2Cピンに外部から触れると、MCP23017だけがリセット/化けを起こす。
+// このときMCU側から見るとI2Cは正常にACKを返し続けるのでエラーにならず、
+// 「エラーは出ないがキーだけ永久に効かない」状態になる。
+// IODIRBは設定値が0x00、リセット後の初期値が0xffなので、これで判別できる
+static bool ioexp_is_healthy() {
+
+    uint8_t iodirb[1] = { 0xff };
+    if(ioexp_read_register(IOEXP_IODIRB, iodirb) < 0) return false;
+
+    return (iodirb[0] == 0b00000000);
+
+}
+
+void ioexp_init() {
+
+    ioexp_hard_reset();
+    ioexp_config_registers();
+    ioexp_resync_keyinfo();
+
+    // キースキャンの有効化
     ioexp_start_keyscan_timer();
 
 }
@@ -340,14 +485,44 @@ void ioexp_getchrinfo() {
 
   chrinfo[0] = 0x00;
 
+  // 全列を同時にLowにして1回だけ読み、どこかに押下があるかを先に調べる。
+  // 何も押されていない状態が続く限り (BASIC実行中のほとんどの時間がこれ)
+  // 8列スキャンを丸ごと省略できるので、1回のスキャンが
+  // I2C 16回 (約0.7ms) から 2回 (約0.09ms) で済む
+  if(ioexp_all_released) {
+
+    if(ioexp_write_register(IOEXP_OLATB, 0b00000000) < 0) return;
+    uint8_t any_keyinfo[1] = { 0xff };
+    if(ioexp_read_register(IOEXP_GPIOA, any_keyinfo) < 0) return;
+
+    // まだ全リリースのままなら、列ごとの状態は変化しようがない
+    if(any_keyinfo[0] == 0xff) return;
+
+  }
+
+  // ここから先は列ごとの状態を更新する。
+  // 途中でreturnした場合に省略経路へ入らないよう、先に倒しておく
+  ioexp_all_released = false;
+
   // 1列ずつキーマトリクスで押下情報が変化した列を確認する
   for(int i=0; i<8; i++){
 
     // 対象の列の出力を変えてその列の情報を取得
+    // 1回でも失敗したらこの回のスキャンは捨てる。
+    // 化けた読み値から差分を作らないためと、
+    // 死んだバスに残り7列分の通信を投げて時間を捨てないため
     uint8_t offbit = ~(0b00000001 << i);
-    ioexp_write_register(IOEXP_OLATB, offbit);
+    if(ioexp_write_register(IOEXP_OLATB, offbit) < 0) return;
     uint8_t current_keyinfo[1] = { 0xff };
-    ioexp_read_register(IOEXP_GPIOA, current_keyinfo);
+    if(ioexp_read_register(IOEXP_GPIOA, current_keyinfo) < 0) return;
+
+    // デバウンス。
+    // 前回のスキャンと読み値が違う間は確定させない。
+    // 2回連続で同じ値が読めて初めて下の判定に進む
+    if(sample_keyinfo[i] != current_keyinfo[0]) {
+      sample_keyinfo[i] = current_keyinfo[0];
+      continue;
+    }
 
     // 変化していたら
     if(prev_keyinfo[i] != current_keyinfo[0]) {
@@ -406,11 +581,25 @@ void ioexp_getchrinfo() {
     }
   }
 
+  // 全列を最後まで読めて、かつ確定値・生値ともに全リリースなら、
+  // 次回から省略経路を使える
+  for(int i=0; i<8; i++) {
+    if(prev_keyinfo[i] != 0xff || sample_keyinfo[i] != 0xff) return;
+  }
+  ioexp_all_released = true;
+
 }
 
 short ioexp_getkey(short index) {
 
-    ioexp_stop_keyscan_timer();
+    // BASIC側から任意の値が渡ってくるので範囲を検査する。
+    // 検査しないとkeys[]の範囲外を読んでしまう
+    if(index < 0 || index >= 8) return 0;
+
+    // スキャンを一時停止する。
+    // ここでI2Cの最中にスキャンが割り込むとバスの状態が壊れる
+    bool scan_was_enabled = ioexp_scan_enable;
+    ioexp_scan_enable = false;
 
     short keys[8] = {0x00};
     short index_current = 0;
@@ -419,9 +608,9 @@ short ioexp_getkey(short index) {
     for(int i=0; i<8; i++){
 
         uint8_t offbit = ~(0b00000001 << i);
-        ioexp_write_register(IOEXP_OLATB, offbit);
+        if(ioexp_write_register(IOEXP_OLATB, offbit) < 0) continue;
         uint8_t current_keyinfo[1] = { 0xff };
-        ioexp_read_register(IOEXP_GPIOA, current_keyinfo);
+        if(ioexp_read_register(IOEXP_GPIOA, current_keyinfo) < 0) continue;
 
         for(int j=0; j<8; j++){
 
@@ -446,7 +635,10 @@ short ioexp_getkey(short index) {
     }
     if(!flg_shift) status_shift = false;
 
-    ioexp_start_keyscan_timer();
+    // prev_keyinfo / sample_keyinfo はあえて触らない。
+    // 停止中に押されたキーは、再開後に差分として正しく拾われる
+    ioexp_scan_enable = scan_was_enabled;
+    ioexp_next_scan = time_us_32() + IOEXP_SCAN_INTERVAL_MS * 1000;
 
     return keys[index];
 }

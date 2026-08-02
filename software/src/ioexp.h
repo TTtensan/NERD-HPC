@@ -5,7 +5,18 @@
 extern "C" {
 #endif
 
-#define IOEXP_CHRBUF 8
+#define IOEXP_CHRBUF 32
+
+// キースキャンの間隔[ms]。デバウンスは2回連続一致なので、
+// キー入力が確定するまでの遅延は最大 IOEXP_SCAN_INTERVAL_MS * 2
+#define IOEXP_SCAN_INTERVAL_MS 10
+
+// I2Cのタイムアウト[us]。I2C0は1MHzなので3バイトでも30us程度
+#define IOEXP_I2C_TIMEOUT_US 2000
+
+// 何回スキャンごとにMCP23017の設定レジスタの健全性を確認するか
+// (IOEXP_SCAN_INTERVAL_MS = 10ms なので 50回 = 500ms間隔)
+#define IOEXP_HEALTH_CHECK_SCANS 50
 
 #define IOEXP_ADDR       0x20
 #define IOEXP_IODIRA     0x00
@@ -51,8 +62,10 @@ char ioexp_bl2tl(char code); // 記号の切り替え
 void ioexp_init();
 char ioexp_getchr();
 uint32_t ioexp_getchr_available();
-void ioexp_write_register(uint8_t reg, uint8_t value);
+int ioexp_write_register(uint8_t reg, uint8_t value); // 0 = 成功, -1 = 失敗
+int ioexp_read_register(uint8_t reg, uint8_t retval[1]); // 0 = 成功, -1 = 失敗
 void ioexp_getchrinfo(); // キーのコードと押したか離したかの情報を渡す
+void ioexp_task(); // キースキャンの実行。メインループから頻繁に呼ぶこと
 short ioexp_getkey(short index); // 現在押下しているキーの配列からindex番目のキー情報を返す
 
 extern volatile short g_en_shift, g_en_esc;
