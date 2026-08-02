@@ -1709,7 +1709,13 @@ void isleepms() {
         return;
     }
 
-    sleep_ms(ms);
+    // 単純にsleep_ms()で待つとその間キースキャンが完全に止まるので、
+    // 1msずつ刻んでスキャンを回しながら待つ
+    absolute_time_t end = make_timeout_time_ms(ms);
+    while(absolute_time_diff_us(get_absolute_time(), end) > 0) {
+        ioexp_task();
+        sleep_ms(1);
+    }
 }
 
 void isleepus() {
