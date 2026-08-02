@@ -6,7 +6,4 @@ hardware/*/*.bak
 hardware/*/fp-info-cache
 hardware/*/*.lck
 
-software/_build/*
-!software/_build/src
-software/_build/src/*
-!NERD_HPC.uf2
+# software配下のビルド成果物はsoftware/.gitignoreで管理
