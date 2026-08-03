@@ -50,12 +50,29 @@
 #define c_getch( ) getch2()
 #define c_kbhit( ) kbhit2()
 
+// シリアル出力のバッファ。
+// 1文字ごとにprintf()を呼ぶと毎回stdioのロック取得とUSB CDCへの
+// ブロッキング書き込みが走り、PRINTの実行時間の大半をここで使ってしまう。
+// 改行かバッファが埋まるまで溜めて、まとめて書き出す
+#define SIZE_OBUF 64
+static char obuf[SIZE_OBUF];
+static unsigned char obufi = 0;
+
+void oflush() {
+    if(obufi == 0) return;
+    fwrite(obuf, 1, obufi, stdout);
+    obufi = 0;
+    fflush(stdout);
+}
+
 void putch2(char c) {
-    printf("%c", c);
+    obuf[obufi++] = c;
+    if(obufi >= SIZE_OBUF || c == '\n') oflush();
     lcd_print_c_auto(c, black);
 }
 
 char getch2() {
+    oflush(); // 入力待ちに入る前に溜まっている分を吐き出す
     while(true) {
         if(ioexp_getchr_available()) return ioexp_getchr();
         else if(tud_cdc_available()) return getchar();
@@ -731,13 +748,42 @@ short getlineno(unsigned char *lp) {
   return *(lp + 1) | *(lp + 2) << 8; //行番号を持ち帰る
 }
 
+// 行番号から行ポインタを引くキャッシュ。
+// getlp()はリストの先頭からの線形探索なので、GOTO/GOSUBのたびに
+// プログラム全体を舐めることになり、行数の多いプログラムでは
+// ループ1周のコストが行数に比例して増えていく。
+// 行番号を鍵にした直接マップで、分岐先の再探索を省く。
+// リストを書き換えたらポインタが無効になるのでlpc_clear()すること
+#define SIZE_LPCACHE 32 //2のべき乗であること
+static short lpc_lineno[SIZE_LPCACHE]; //0は空きの印（行番号は1以上）
+static unsigned char* lpc_lp[SIZE_LPCACHE];
+
+void lpc_clear() {
+  for (unsigned char i = 0; i < SIZE_LPCACHE; i++)
+    lpc_lineno[i] = 0;
+}
+
 // Search line by line number
 unsigned char* getlp(short lineno) {
   unsigned char *lp; //ポインタ
+  unsigned char slot; //キャッシュの位置
+
+  slot = (unsigned char)lineno & (SIZE_LPCACHE - 1);
+  if (lpc_lineno[slot] == lineno) //もしキャッシュに入っていたら
+    return lpc_lp[slot]; //探索せずに持ち帰る
 
   for (lp = listbuf; *lp; lp += *lp) //先頭から末尾まで繰り返す
     if (getlineno(lp) >= lineno) //もし指定の行番号以上なら
       break; //繰り返しを打ち切る
+
+  //見つかった行だけを憶える。
+  //指定より後ろの行やリスト末尾を憶えると、間の行が挿入されたときに
+  //古い答えを返してしまう（挿入時にlpc_clear()するので実際には
+  //起こらないが、憶える条件は狭くしておく）
+  if (lineno > 0 && *lp && getlineno(lp) == lineno) {
+    lpc_lineno[slot] = lineno;
+    lpc_lp[slot] = lp;
+  }
 
   return lp; //ポインタを持ち帰る
 }
@@ -754,6 +800,8 @@ void inslist() {
   }
 
   insp = getlp(getlineno(ibuf)); //挿入位置を取得
+
+  lpc_clear(); //以降で行が動くのでキャッシュを捨てる
 
   //同じ行番号の行が存在したらとりあえず削除
   if (getlineno(insp) == getlineno(ibuf)) { //もし行番号が一致したら
@@ -2652,6 +2700,7 @@ void inew(void) {
   lstki = 0; //FORスタックインデクスを0に初期化
   *listbuf = 0; //プログラム保存領域の先頭に末尾の印を置く
   clp = listbuf; //行ポインタをプログラム保存領域の先頭に設定
+  lpc_clear(); //行ポインタのキャッシュを捨てる
 }
 
 // 16進数のファイル出力

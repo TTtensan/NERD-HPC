@@ -122,23 +122,27 @@ void lcd_disp_vbuf(){
 
     gpio_put(PIN_LCD_CS, 0);
 
-    uint8_t src[1];
+    // 1バイトずつspi_write_blocking()を呼ぶと1フレームで1027回の
+    // 呼び出しになり、60Hzのタイマ割り込みからこれを回すとBASICの
+    // 実行時間をかなり食う。ページ単位でまとめて転送する。
+    // この関数はrepeating_timerのコールバックからのみ呼ばれるので
+    // 転送バッファはstaticで良い
+    static uint8_t src[128];
 
     for(int i=0; i<8; i++){
 
         gpio_put(PIN_LCD_RS, 0); // コマンドの送信
         src[0] = 0b10110000+i; // ページアドレスの設定
-        spi_write_blocking(spi1, src, 1);
-        src[0] = 0b00010000; // コラムアドレスの設定(上位桁)
-        spi_write_blocking(spi1, src, 1);
-        src[0] = 0b00000000; // コラムアドレスの設定(下位桁)
-        spi_write_blocking(spi1, src, 1);
+        src[1] = 0b00010000; // コラムアドレスの設定(上位桁)
+        src[2] = 0b00000000; // コラムアドレスの設定(下位桁)
+        spi_write_blocking(spi1, src, 3);
+
+        for(int j=0; j<128; j++){
+            src[j] = v_buf[i][j] | vg_buf[i][j];
+        }
 
         gpio_put(PIN_LCD_RS, 1); // ディスプレイデータの送信
-        for(int j=0; j<128; j++){
-            src[0] = v_buf[i][j] | vg_buf[i][j];
-            spi_write_blocking(spi1, src, 1);
-        }
+        spi_write_blocking(spi1, src, 128);
 
     }
 
