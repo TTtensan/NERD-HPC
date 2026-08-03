@@ -38,7 +38,12 @@
 #define UART_ID_GENIO uart1
 #define I2C_ID_GENIO i2c1
 
-#define I2C0_BAUDRATE 1000000
+// 1MHz(Fast-mode Plus)は外付けプルアップが1kΩ級でないと成立しない。
+// 1MHzではIOピンに指で触れただけでバスが完全無応答になり、
+// MCP23017のレジスタが化けたり、キー入力が2秒ほど止まったりしていた。
+// 400kHzに落とすと再現しなくなったので、こちらを採用する。
+// プルアップ抵抗を1kΩ級に見直せば1MHzへ戻せる
+#define I2C0_BAUDRATE 400000
 
 void pin_init();
 
