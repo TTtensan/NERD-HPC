@@ -3,6 +3,7 @@
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 #include "hardware/pwm.h"
+#include "hardware/clocks.h"
 #include "pin.h"
 #include "ir.h"
 
@@ -75,7 +76,10 @@ void pin_init(){
 
     // IR
     gpio_set_function(PIN_IR_TX, GPIO_FUNC_PWM);
-    ir_clock_freq = 125000000;
+    // PWMのカウンタはclk_sysで動く。
+    // 直書きするとset_sys_clock_khz()で搬送波の周波数がそのままずれ、
+    // 38kHzを期待している受光モジュールが反応しなくなる
+    ir_clock_freq = clock_get_hz(clk_sys);
     ir_pwm_freq = 38000;
     ir_wrap = ir_clock_freq / ir_pwm_freq - 1; // TOP値
     ir_slice_num = pwm_gpio_to_slice_num(PIN_IR_TX);

@@ -1348,6 +1348,7 @@ short imul() {
     cip++; //中間コードポインタを次へ進める
     tmp = ivalue(); //演算値を取得
     value =((uint16_t)value)^((uint16_t)tmp);
+    break; //ここで打ち切る
 
   default: //以上のいずれにも該当しなかった場合
     return value; //値を持ち帰る
@@ -2174,6 +2175,10 @@ void istpsnd() {
 }
 #endif
 
+// 何文に1回［ESC］の確認をするか。2のべき乗であること
+#define ESC_CHECK_INTERVAL 16
+static unsigned short esc_check_count = 0;
+
 // Execute a series of i-code
 unsigned char* iexe() {
   short lineno; //行番号
@@ -2182,13 +2187,18 @@ unsigned char* iexe() {
   short condition; //IF文の条件値
 
   while (*cip != I_EOL) { //行末まで繰り返す
-  
-  //強制的な中断の判定
-    if (c_kbhit()) //もし未読文字があったら
-      if (c_getch() == 27) { //読み込んでもし［ESC］キーだったら
-        err = ERR_ESC; //エラー番号をセット
-        break; //打ち切る
-      }
+
+  //強制的な中断の判定。
+  //c_kbhit()はキースキャンとTinyUSBのコア跨ぎの問い合わせを伴うので、
+  //1文ごとに通すとタイトなFORループでは無視できない。
+  //キースキャン自体がIOEXP_SCAN_INTERVAL_MS(10ms)間隔で間引かれており、
+  //ESCの応答性はそちらで律速されているため、ここを間引いても体感は変わらない
+    if ((++esc_check_count & (ESC_CHECK_INTERVAL - 1)) == 0)
+      if (c_kbhit()) //もし未読文字があったら
+        if (c_getch() == 27) { //読み込んでもし［ESC］キーだったら
+          err = ERR_ESC; //エラー番号をセット
+          break; //打ち切る
+        }
 
     //中間コードを実行
     switch (*cip) { //中間コードで分岐

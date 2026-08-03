@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "pico/stdlib.h"
+#include "pico/mutex.h"
 #include "lcd.h"
 #include "pin.h"
 #include "hardware/spi.h"
@@ -26,6 +27,14 @@ static uint8_t y_cursor = 0;
 static uint8_t count_candel = 0; // print_c_autoでdelが来た際に文字が何個消去できるかのカウント
 
 uint8_t c_code_prev = '0';
+
+// SPI1(LCD)の排他。
+// 画面転送はcore1から、コマンド送信(lcd_scroll等)はBASICを実行するcore0から
+// 呼ばれるため、CSとRSの操作が2コアで交錯しないように守る
+auto_init_mutex(lcd_spi_mutex);
+
+// 次に画面を転送する時刻[us]。lcd_task()が参照する
+static uint32_t lcd_next_frame = 0;
 
 void lcd_init(){
 
@@ -62,29 +71,33 @@ void lcd_init(){
     lcd_cls(white, text);
     lcd_cls(white, graphic);
 
-    lcd_start_disp_vbuf_timer();
+    lcd_next_frame = time_us_32();
 
 }
 
 void lcd_write_command(uint8_t cmd){
 
+    mutex_enter_blocking(&lcd_spi_mutex);
     gpio_put(PIN_LCD_CS, 0);
     gpio_put(PIN_LCD_RS, 0);
     uint8_t src[1];
     src[0] = cmd;
     spi_write_blocking(spi1, src, 1);
     gpio_put(PIN_LCD_CS, 1);
+    mutex_exit(&lcd_spi_mutex);
 
 }
 
 void lcd_write_data(uint8_t data){
 
+    mutex_enter_blocking(&lcd_spi_mutex);
     gpio_put(PIN_LCD_CS, 0);
     gpio_put(PIN_LCD_RS, 1);
     uint8_t src[1];
     src[0] = data;
     spi_write_blocking(spi1, src, 1);
     gpio_put(PIN_LCD_CS, 1);
+    mutex_exit(&lcd_spi_mutex);
 
 }
 
@@ -120,12 +133,14 @@ void lcd_cls(color cl, screen sc){
 
 void lcd_disp_vbuf(){
 
+    mutex_enter_blocking(&lcd_spi_mutex);
+
     gpio_put(PIN_LCD_CS, 0);
 
     // 1バイトずつspi_write_blocking()を呼ぶと1フレームで1027回の
     // 呼び出しになり、60Hzのタイマ割り込みからこれを回すとBASICの
     // 実行時間をかなり食う。ページ単位でまとめて転送する。
-    // この関数はrepeating_timerのコールバックからのみ呼ばれるので
+    // この関数はcore1のlcd_task()からのみ呼ばれるので
     // 転送バッファはstaticで良い
     static uint8_t src[128];
 
@@ -147,6 +162,8 @@ void lcd_disp_vbuf(){
     }
 
     gpio_put(PIN_LCD_CS, 1);
+
+    mutex_exit(&lcd_spi_mutex);
 
     flg_vsync = true;
 
@@ -220,11 +237,11 @@ void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc){
 
     page = y_pos >> 3; // 8で割って表示するページ数を求める
 
-    // 8で割った余りを求めて表示するビット位置を求める
-    dot_extract = 0b00000001;
-    for(uint8_t i=y_pos&0b00000111; i>0; i--){
-        dot_extract <<= 1;
-    }
+    // 8で割った余りがそのままビット位置になる。
+    // ここは以前1ビットずつ左シフトするループだったが、
+    // lcd_line()やlcd_circle()からドット1個ごとに呼ばれるため、
+    // 最大7回の空回りがそのまま描画時間に乗っていた
+    dot_extract = (uint8_t)(1u << (y_pos & 0b00000111));
 
     // ドットの色を指定し、バッファと論理演算する
     if(cl){
@@ -239,9 +256,84 @@ void lcd_pset(int16_t x_pos, int16_t y_pos, color cl, screen sc){
 
 }
 
+// 水平線をバッファへ直接書く。
+// lcd_pset()を1ドットずつ呼ぶと、横128ドットの線で128回の関数呼び出しと
+// 128回のページ・ビット位置の再計算になる。同じ水平線上のドットは
+// 全て同じページの同じビットなので、マスクを1度だけ作ってx方向に流せばよい。
+// GRECTの塗りつぶしとGCIRCLEの塗りつぶしはこれを縦に繰り返すだけなので、
+// ここが効くと図形描画全体が効く
+static void lcd_hspan(int16_t x_pos0, int16_t x_pos1, int16_t y_pos, color cl, screen sc){
+
+    if(y_pos < 0 || 63 < y_pos) return;
+
+    if(x_pos0 > x_pos1){ int16_t t = x_pos0; x_pos0 = x_pos1; x_pos1 = t; }
+    if(x_pos1 < 0 || 127 < x_pos0) return; // 完全に画面外
+    if(x_pos0 < 0) x_pos0 = 0;
+    if(x_pos1 > 127) x_pos1 = 127;
+
+    uint8_t page = y_pos >> 3;
+    uint8_t mask = (uint8_t)(1u << (y_pos & 0b00000111));
+    volatile uint8_t *row = (sc == text) ? v_buf[page] : vg_buf[page];
+
+    if(cl){
+        for(int16_t x=x_pos0; x<=x_pos1; x++) row[x] |= mask;
+    } else {
+        uint8_t nmask = (uint8_t)~mask;
+        for(int16_t x=x_pos0; x<=x_pos1; x++) row[x] &= nmask;
+    }
+
+}
+
+// 垂直線をバッファへ直接書く。
+// 縦は8ドットで1バイトに収まるので、ページごとにまとめてマスクを作れば
+// 最大64回のlcd_pset()が最大8回のバイト演算になる
+static void lcd_vspan(int16_t x_pos, int16_t y_pos0, int16_t y_pos1, color cl, screen sc){
+
+    if(x_pos < 0 || 127 < x_pos) return;
+
+    if(y_pos0 > y_pos1){ int16_t t = y_pos0; y_pos0 = y_pos1; y_pos1 = t; }
+    if(y_pos1 < 0 || 63 < y_pos0) return; // 完全に画面外
+    if(y_pos0 < 0) y_pos0 = 0;
+    if(y_pos1 > 63) y_pos1 = 63;
+
+    for(int16_t y=y_pos0; y<=y_pos1; ){
+
+        uint8_t page = y >> 3;
+        int16_t page_end = (page << 3) + 7; // このページが担当する最後のy
+        if(page_end > y_pos1) page_end = y_pos1;
+
+        // このページ内で塗る範囲のビットだけを立てる
+        uint8_t mask = 0;
+        for(int16_t yy=y; yy<=page_end; yy++) mask |= (uint8_t)(1u << (yy & 0b00000111));
+
+        if(sc == text){
+            if(cl) v_buf[page][x_pos] |= mask;
+            else   v_buf[page][x_pos] &= (uint8_t)~mask;
+        } else {
+            if(cl) vg_buf[page][x_pos] |= mask;
+            else   vg_buf[page][x_pos] &= (uint8_t)~mask;
+        }
+
+        y = page_end + 1;
+    }
+
+}
+
 // ブレゼンハムのアルゴリズム
 // x_pos0,x_pos1(0~127), y_pos0,y_pos1(0~47), cl(white,black)
 void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl){
+
+    // 水平・垂直はブレゼンハムを通さず直接バッファを叩く。
+    // 塗りつぶし系は全てこの2つに帰着するので、ここで分岐する価値がある
+    if(y_pos0 == y_pos1){
+        lcd_hspan(x_pos0, x_pos1, y_pos0, cl, graphic);
+        return;
+    }
+    if(x_pos0 == x_pos1){
+        lcd_vspan(x_pos0, y_pos0, y_pos1, cl, graphic);
+        return;
+    }
+
 
     int16_t tmp; // x,yの値入れ替え用
     int16_t delta_x, delta_y;
@@ -292,14 +384,13 @@ void lcd_line(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, co
 void lcd_rect(int16_t x_pos0, int16_t y_pos0, int16_t x_pos1, int16_t y_pos1, color cl, bool fill){
 
     if(fill){
-        if(y_pos1 >= y_pos0){
-            for(int16_t i=y_pos0; i<=y_pos1; i++){
-                lcd_line(x_pos0, i, x_pos1, i, cl);
-            }
-        } else {
-            for(uint8_t i=y_pos1; i<=y_pos0; i++){
-                lcd_line(x_pos0, i, x_pos1, i, cl);
-            }
+        // 1行ずつ水平スパンで塗る。
+        // 以前は下側のループカウンタがuint8_tだったため、
+        // y_pos1が負のときに終了条件を満たさず暴走する余地があった
+        int16_t y_top = (y_pos1 >= y_pos0) ? y_pos0 : y_pos1;
+        int16_t y_bottom = (y_pos1 >= y_pos0) ? y_pos1 : y_pos0;
+        for(int16_t i=y_top; i<=y_bottom; i++){
+            lcd_hspan(x_pos0, x_pos1, i, cl, graphic);
         }
     } else {
         lcd_line(x_pos0, y_pos0, x_pos1, y_pos0, cl);
@@ -390,21 +481,68 @@ void lcd_circle(int16_t x_pos, int16_t y_pos, uint8_t rad, color cl, bool fill){
 
 }
 
+// フォント1列(縦8ドット)をバッファへ書き込む書き方
+typedef enum {
+    font_opaque, // パターンの0/1をそのまま書く(背景も塗る)
+    font_set,    // パターンが1のドットだけ立てる(黒の透過)
+    font_clear   // パターンが0のドットだけ落とす(白の透過)
+} font_write_mode;
+
+// フォント1列分(縦8ドット)を(x_pos, y_pos)から書き込む。
+// 以前はここをlcd_pset()で1ドットずつ8回叩いていたので、
+// 1文字あたり40回の関数呼び出しとページ計算が発生していた。
+// 縦8ドットは高々2ページにしかまたがらないので、
+// シフトしたパターンとマスクを作って最大2バイトの演算で済ませる
+static void lcd_font_col(uint8_t x_pos, int16_t y_pos, uint8_t pat,
+                         screen sc, font_write_mode mode){
+
+    if(x_pos > 127) return;
+
+    // 8ドットが2ページにまたがる分をシフト量で表す
+    uint8_t shift = y_pos & 0b00000111;
+    // 上位側にはみ出した分を拾うため16ビットで持つ
+    uint16_t pat16 = (uint16_t)pat << shift;
+    uint16_t msk16 = (uint16_t)0x00ff << shift;
+
+    for(int part=0; part<2; part++){
+
+        int16_t page = (y_pos >> 3) + part;
+        if(page < 0 || page > 7) continue;
+
+        uint8_t p = (uint8_t)(pat16 >> (part * 8));
+        uint8_t m = (uint8_t)(msk16 >> (part * 8));
+        if(m == 0) continue; // このページには1ドットもかからない
+
+        volatile uint8_t *cell = (sc == text) ? &v_buf[page][x_pos]
+                                              : &vg_buf[page][x_pos];
+
+        switch(mode){
+        case font_opaque:
+            *cell = (uint8_t)((*cell & ~m) | (p & m));
+            break;
+        case font_set:
+            *cell |= (uint8_t)(p & m);
+            break;
+        case font_clear:
+            // パターンが0でマスク内のビットを落とす
+            *cell &= (uint8_t)~((uint8_t)(~p) & m);
+            break;
+        }
+    }
+
+}
+
 void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
 
-    uint8_t font_code, font_data_col, dot_pos, dot_extract;
-    bool dot_cl;
+    uint8_t font_code, font_data_col;
 
     font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
     for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
-        dot_extract = 0b00000001;
-        for(dot_pos=0; dot_pos<8; dot_pos++) { // フォントデータを列の上から1ビットずつ描画
-            dot_cl = (font[font_code][font_data_col] & dot_extract) ? 1 : 0; // フォントデータ抽出
-            if(!cl) dot_cl = !dot_cl; // 白色なら反転
-            lcd_pset(x_pos, y_pos+dot_pos, dot_cl, text);
-            dot_extract <<= 1; // フォントデータの抽出を次のビットに移行
-        }
+        // 白色ならフォントを反転させる (以前のドット単位の反転と同じ結果)
+        uint8_t pat = cl ? font[font_code][font_data_col]
+                         : (uint8_t)~font[font_code][font_data_col];
+        lcd_font_col(x_pos, (int16_t)y_pos, pat, text, font_opaque);
         x_pos++;
     }
 
@@ -412,25 +550,21 @@ void lcd_print_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl){
 
 void lcd_gprint_c_free(uint8_t x_pos, uint8_t y_pos, uint8_t c_code, color cl, bool transparent){
 
-    uint8_t font_code, font_data_col, dot_pos, dot_extract;
-    bool dot_cl;
+    uint8_t font_code, font_data_col;
 
     font_code = c_code; // 文字コードをプログラム内のフォントコードに変換
 
-    for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
-        dot_extract = 0b00000001;
-        for(dot_pos=0; dot_pos<8; dot_pos++) { // フォントデータを列の上から1ビットずつ描画
-            dot_cl = (font[font_code][font_data_col] & dot_extract) ? 1 : 0; // フォントデータ抽出
-            if(!cl) dot_cl = !dot_cl; // 白色なら反転
+    // 透過のときは、黒なら立っているドットだけを立て、
+    // 白なら落ちているドットだけを落とす (元のドット単位の条件と同じ)
+    font_write_mode mode;
+    if(!transparent)  mode = font_opaque;
+    else if(cl)       mode = font_set;
+    else              mode = font_clear;
 
-            // 透過なら文字だけを描画
-            if(transparent) {
-              if((cl && dot_cl) || (!cl && !dot_cl)) lcd_pset(x_pos, y_pos+dot_pos, dot_cl, graphic);
-            } else {
-              lcd_pset(x_pos, y_pos+dot_pos, dot_cl, graphic);
-            }
-            dot_extract <<= 1; // フォントデータの抽出を次のビットに移行
-        }
+    for(font_data_col=0; font_data_col<5; font_data_col++) { // フォントデータを左側から順に表示
+        uint8_t pat = cl ? font[font_code][font_data_col]
+                         : (uint8_t)~font[font_code][font_data_col];
+        lcd_font_col(x_pos, (int16_t)y_pos, pat, graphic, mode);
         x_pos++;
     }
 
@@ -653,28 +787,31 @@ bool lcd_pget(int16_t x_pos, int16_t y_pos) {
 
   page = y_pos >> 3; // 8で割って表示するページ数を求める
 
-  // 8で割った余りを求めて表示するビット位置を求める
-  dot_extract = 0b00000001;
-  for(uint8_t i=y_pos&0b00000111; i>0; i--){
-    dot_extract <<= 1;
-  }
+  // 8で割った余りがそのままビット位置になる (lcd_pset()と同じ)
+  dot_extract = (uint8_t)(1u << (y_pos & 0b00000111));
 
   return (v_buf[page][x_pos]|vg_buf[page][x_pos])&dot_extract;
 
 }
 
-bool repeating_timer_callback(struct repeating_timer *t) {
+// 画面転送を1フレーム分進める。core1のメインループから頻繁に呼ぶこと。
+//
+// 以前はcore0のrepeating_timer (割り込み) からlcd_disp_vbuf()を呼んでいた。
+// 8MHzのSPIで1027バイトを送るのに約1msかかり、spi_write_blocking()は
+// その間ビジーウェイトするため、16.67msごとに約1msをBASICの実行から
+// 割り込みで奪っていた (およそ6〜7%)。
+// core1はtud_task()を回すだけでほぼ空いているので、そちらへ移す。
+// これでcore0のBASICは画面転送で一切止まらない
+void lcd_task(){
+
+    if((int32_t)(time_us_32() - lcd_next_frame) < 0) return;
+
+    // 転送が遅れても取り返そうとフレームを連続で送らないよう、
+    // 現在時刻を基準に次のフレームを決める
+    lcd_next_frame = time_us_32() + 16667;
 
     lcd_disp_vbuf();
     current_frame++;
-    return true;
-
-}
-
-void lcd_start_disp_vbuf_timer(){
-
-    static struct repeating_timer timer;
-    add_repeating_timer_us(-16667, repeating_timer_callback, NULL, &timer);
 
 }
 
