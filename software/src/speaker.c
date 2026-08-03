@@ -1,13 +1,18 @@
 #include "pico/stdlib.h"
 #include "pin.h"
 #include "hardware/pwm.h"
+#include "hardware/clocks.h"
 #include "speaker.h"
 
 float divider = 255;
 
 uint16_t calc_top_value(uint freq){
 
-    return (125000000 / (freq * divider));
+    // PWMのカウンタはclk_sysをdividerで分周したもので動く。
+    // ここは以前125000000を直書きしていたが、
+    // set_sys_clock_khz()でsys_clkを変えると音程がそのままずれるので、
+    // 実際のclk_sysを見て計算する
+    return (clock_get_hz(clk_sys) / (freq * divider));
 
 }
 

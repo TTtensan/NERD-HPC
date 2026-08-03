@@ -59,8 +59,7 @@ void lcd_vsync();
 short lcd_scr(uint8_t x_pos, uint8_t y_pos);
 bool lcd_pget(int16_t x_pos, int16_t y_pos);
 
-bool repeating_timer_callback(struct repeating_timer *t);
-void lcd_start_disp_vbuf_timer();
+void lcd_task(); // 画面転送。core1のメインループから頻繁に呼ぶこと
 unsigned long lcd_get_current_frame();
 
 #define abs(a) (((a)>0) ? (a) : -(a))

@@ -34,15 +34,23 @@ endif()
 
 set(PICO_EXAMPLES_PATH ${PROJECT_SOURCE_DIR})
 
+# sys_clk を 250MHz に引き上げている (main.c の set_sys_clock_khz)。
+# フラッシュのSPIクロックは sys_clk をこの値で割ったものなので、
+# 既定の 2 のままだと 125MHz になり、QSPIフラッシュの定格(133MHz)ぎりぎりで
+# 起動しなくなることがある。4 にして 62.5MHz に落とす
+add_compile_definitions(PICO_FLASH_SPI_CLKDIV=4)
+
+# 警告オプションは add_subdirectory() より前に置くこと。
+# 後ろに書くと、既に追加されたディレクトリのターゲットには一切効かない
+add_compile_options(-Wall
+        -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
+        -Wno-unused-function # we have some for the docs that aren't called
+        -Wno-maybe-uninitialized
+        )
+
 # Initialize the SDK
 pico_sdk_init()
 
 add_subdirectory(src)
 add_subdirectory(libraries/no-OS-FatFS-SD-SPI-RPi-Pico/FatFs_SPI build)
 add_subdirectory(${PICO_TINYUSB_PATH}/examples/device tinyusb_device_examples)
-
-add_compile_options(-Wall
-        -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
-        -Wno-unused-function # we have some for the docs that aren't called
-        -Wno-maybe-uninitialized
-        )
