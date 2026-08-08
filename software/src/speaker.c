@@ -12,7 +12,14 @@ uint16_t calc_top_value(uint freq){
     // ここは以前125000000を直書きしていたが、
     // set_sys_clock_khz()でsys_clkを変えると音程がそのままずれるので、
     // 実際のclk_sysを見て計算する
-    return (clock_get_hz(clk_sys) / (freq * divider));
+    if(freq == 0) return 0; // ゼロ除算避け
+
+    // TOP値はwrapレジスタの都合で16bitに収まらないといけない。
+    // 低すぎる周波数だとそのまま溢れて、全く違う音程になっていた
+    uint32_t top_value = (uint32_t)(clock_get_hz(clk_sys) / (freq * divider));
+    if(top_value > 65535) top_value = 65535;
+
+    return (uint16_t)top_value;
 
 }
 
@@ -30,6 +37,13 @@ void play_sound(uint freq, uint duration_ms){
 
     uint slice_num = pwm_gpio_to_slice_num(PIN_SPEAKER);
     uint16_t top_value = calc_top_value(freq);
+
+    if(top_value == 0){ // 鳴らせない周波数。無音として扱う
+        pwm_set_chan_level(slice_num, PWM_CHAN_B, 0);
+        if(duration_ms) sleep_ms(duration_ms);
+        return;
+    }
+
     pwm_set_wrap(slice_num, top_value);
     pwm_set_chan_level(slice_num, PWM_CHAN_B, top_value/2);
     if(duration_ms) {

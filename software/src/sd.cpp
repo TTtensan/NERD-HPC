@@ -17,10 +17,21 @@
 static std::vector<spi_t *> spis;
 static std::vector<sd_card_t *> sd_cards;
 
+// 画像バッファは bool[48][128] 固定。
+// 幅・高さはファイルの中身をそのまま読んだ値なので、
+// 壊れたファイルや別サイズのファイルを掴んだときに
+// バッファを踏み越えないよう必ずここで頭打ちにする
+#define SD_IMAGE_MAX_WIDTH  128
+#define SD_IMAGE_MAX_HEIGHT 48
+
+static uint32_t sd_clamp(uint32_t value, uint32_t max) {
+    return (value > max) ? max : value;
+}
+
 size_t sd_get_num() { return sd_cards.size(); }
 sd_card_t *sd_get_by_num(size_t num) {
 
-    if (num <= sd_get_num()) {
+    if (num < sd_get_num()) {
         return sd_cards[num];
     } else {
         return NULL;
@@ -31,7 +42,7 @@ sd_card_t *sd_get_by_num(size_t num) {
 size_t spi_get_num() { return spis.size(); }
 spi_t *spi_get_by_num(size_t num) {
 
-    if (num <= sd_get_num()) {
+    if (num < spi_get_num()) {
         return spis[num];
     } else {
         return NULL;
@@ -90,30 +101,37 @@ void sd_read_bmp(bool bmp_buf[48][128], struct sd_bmp_info* bmp_info, char* file
 
     UINT read_buf_size = 4;
     uint8_t data[read_buf_size];
-    UINT* read_byte_counter;
+    UINT read_byte_counter;
 
+    // BMPヘッダの数値はリトルエンディアンの32bit。
+    // 上位バイトほど8bitずつ重い
     // 画像幅取得
     f_lseek(&fil, 0x12);
-    f_read(&fil, data, read_buf_size, read_byte_counter);
-    bmp_info->image_width = data[3] << 3 | data[2] << 2 | data[1] << 1 | data[0];
+    f_read(&fil, data, read_buf_size, &read_byte_counter);
+    bmp_info->image_width = (uint32_t)data[3] << 24 | (uint32_t)data[2] << 16 | (uint32_t)data[1] << 8 | data[0];
 
     // 画像高さ取得
     f_lseek(&fil, 0x16);
-    f_read(&fil, data, read_buf_size, read_byte_counter);
-    bmp_info->image_height = data[3] << 3 | data[2] << 2 | data[1] << 1 | data[0];
+    f_read(&fil, data, read_buf_size, &read_byte_counter);
+    bmp_info->image_height = (uint32_t)data[3] << 24 | (uint32_t)data[2] << 16 | (uint32_t)data[1] << 8 | data[0];
 
     // 画像データオフセット位置取得
     f_lseek(&fil, 0x0A);
-    f_read(&fil, data, read_buf_size, read_byte_counter);
-    uint32_t image_offset = data[3] << 3 | data[2] << 2 | data[1] << 1 | data[0];
+    f_read(&fil, data, read_buf_size, &read_byte_counter);
+    uint32_t image_offset = (uint32_t)data[3] << 24 | (uint32_t)data[2] << 16 | (uint32_t)data[1] << 8 | data[0];
+
+    // ファイル内のシーク位置計算には元の幅が要るので、頭打ちにする前に控えておく
+    uint32_t src_width = bmp_info->image_width;
+    bmp_info->image_width = sd_clamp(bmp_info->image_width, SD_IMAGE_MAX_WIDTH);
+    bmp_info->image_height = sd_clamp(bmp_info->image_height, SD_IMAGE_MAX_HEIGHT);
 
     previous_frame = lcd_get_current_frame();
 
     // 取得
-    for(int i=0; i<bmp_info->image_height; i++){
-        for(int j=0; j<bmp_info->image_width; j++){
-            f_lseek(&fil, image_offset+((uint32_t)i*bmp_info->image_width+(uint32_t)j)*3);
-            f_read(&fil, data, 3, read_byte_counter);
+    for(uint32_t i=0; i<bmp_info->image_height; i++){
+        for(uint32_t j=0; j<bmp_info->image_width; j++){
+            f_lseek(&fil, image_offset+(i*src_width+j)*3);
+            f_read(&fil, data, 3, &read_byte_counter);
             bmp_buf[bmp_info->image_height-1-i][j] = ((data[2] == 0xFF && data[1] == 0xFF && data[0] == 0xFF)) ? 0 : 1; // 完全な白以外はドットを打つ
         }
     }
@@ -153,22 +171,22 @@ void sd_read_nbi(bool nbi_buf[48][128], struct sd_nbi_info* nbi_info, char* file
 
     UINT read_buf_size = 770;
     uint8_t data[read_buf_size];
-    UINT* read_byte_counter;
+    UINT read_byte_counter;
 
     // 一気に読み込む
-    f_read(&fil, data, read_buf_size, read_byte_counter);
+    f_read(&fil, data, read_buf_size, &read_byte_counter);
 
     // 画像幅取得
-    nbi_info->image_width = data[0];
+    nbi_info->image_width = sd_clamp(data[0], SD_IMAGE_MAX_WIDTH);
 
     // 画像高さ取得
-    nbi_info->image_height = data[1];
+    nbi_info->image_height = sd_clamp(data[1], SD_IMAGE_MAX_HEIGHT);
 
     // バッファにセット、ビットを順に詰めていくイメージ
     uint8_t current_bit = 7;
     uint16_t current_data = 2;
-    for(int i=0; i<nbi_info->image_height; i++){
-        for(int j=0; j<nbi_info->image_width; j++){
+    for(uint32_t i=0; i<nbi_info->image_height; i++){
+        for(uint32_t j=0; j<nbi_info->image_width; j++){
             uint8_t ext_bit = 1 << current_bit;
             nbi_buf[i][j] = data[current_data] & ext_bit;
             if(current_bit == 0){
@@ -225,15 +243,15 @@ int sd_open_nbm(sd_card_t **pSD, FRESULT* fr, FIL* fil, struct sd_nbm_info* nbm_
 
     UINT read_buf_size = 2;
     uint8_t data[read_buf_size];
-    UINT* read_byte_counter;
+    UINT read_byte_counter;
 
-    f_read(fil, data, read_buf_size, read_byte_counter);
+    f_read(fil, data, read_buf_size, &read_byte_counter);
 
     // 画像幅取得
-    nbm_info->image_width = data[0];
+    nbm_info->image_width = sd_clamp(data[0], SD_IMAGE_MAX_WIDTH);
 
     // 画像高さ取得
-    nbm_info->image_height = data[1];
+    nbm_info->image_height = sd_clamp(data[1], SD_IMAGE_MAX_HEIGHT);
 
     return SD_ERR_OK;
 }
@@ -259,19 +277,19 @@ void sd_disp_nbm(FIL* fil, bool nbm_buf[48][128], struct sd_nbm_info* nbm_info, 
 
     UINT read_buf_size = 768;
     uint8_t data[read_buf_size];
-    UINT* read_byte_counter;
+    UINT read_byte_counter;
 
     // 該当ページの先頭に移動
-    f_lseek(fil, 2+page*nbm_info->image_width*nbm_info->image_height/8);
+    f_lseek(fil, 2+(FSIZE_t)page*nbm_info->image_width*nbm_info->image_height/8);
 
     // 一気に読み込む
-    f_read(fil, data, read_buf_size, read_byte_counter);
+    f_read(fil, data, read_buf_size, &read_byte_counter);
 
     // バッファにセット、ビットを順に詰めていくイメージ
     uint8_t current_bit = 7;
     uint16_t current_data = 0;
-    for(int i=0; i<nbm_info->image_height; i++){
-        for(int j=0; j<nbm_info->image_width; j++){
+    for(uint32_t i=0; i<nbm_info->image_height; i++){
+        for(uint32_t j=0; j<nbm_info->image_width; j++){
             uint8_t ext_bit = 1 << current_bit;
             nbm_buf[i][j] = data[current_data] & ext_bit;
             if(current_bit == 0){
@@ -291,8 +309,8 @@ void sd_init(){
 
     // Hardware Configuration of SPI "object"
     p_spi = new spi_t;
-    memset(p_spi, 0, sizeof(spi_t));
     if (!p_spi) panic("Out of memory");
+    memset(p_spi, 0, sizeof(spi_t));
     p_spi->hw_inst = spi0;  // SPI component
     p_spi->miso_gpio = PIN_SD_DAT0;  // GPIO number (not pin number)
     p_spi->mosi_gpio = PIN_SD_CMD;

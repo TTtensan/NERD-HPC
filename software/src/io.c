@@ -10,6 +10,10 @@ uint8_t buf_i2c[2];
 uint8_t addr_i2c = 0x42;
 uint8_t data_i2c_received = 0;
 
+// 未対応の番号を0で返すと呼び出し側がGPIO0を叩いてしまうため、
+// あり得ないピン番号を返して各ラッパーで弾く
+#define IO_PIN_INVALID 0xFFFFFFFFu
+
 uint io_convert_pinno(uint gpio){
     switch(gpio){
         case 1:
@@ -21,7 +25,7 @@ uint io_convert_pinno(uint gpio){
         case 4:
             return PIN_GEN_IO_4;
     }
-    return 0;
+    return IO_PIN_INVALID;
 }
 
 void io_button_callback(uint gpio, uint32_t events){
@@ -36,27 +40,39 @@ void io_init(){
 }
 
 void io_set_dir(uint gpio, bool out){
-    gpio_set_dir(io_convert_pinno(gpio), out);
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return;
+    gpio_set_dir(pin, out);
 }
 
 void io_pull_up(uint gpio){
-    gpio_pull_up(io_convert_pinno(gpio));
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return;
+    gpio_pull_up(pin);
 }
 
 void io_pull_down(uint gpio){
-    gpio_pull_down(io_convert_pinno(gpio));
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return;
+    gpio_pull_down(pin);
 }
 
 void io_disable_pulls(uint gpio){
-    gpio_disable_pulls(io_convert_pinno(gpio));
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return;
+    gpio_disable_pulls(pin);
 }
 
 void io_put(uint gpio, bool value){
-    gpio_put(io_convert_pinno(gpio), value);
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return;
+    gpio_put(pin, value);
 }
 
 bool io_get(uint gpio){
-    return gpio_get(io_convert_pinno(gpio));
+    uint pin = io_convert_pinno(gpio);
+    if(pin == IO_PIN_INVALID) return false;
+    return gpio_get(pin);
 }
 
 static const char *gpio_irq_str[] = {
