@@ -130,35 +130,40 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
   }
 }
 
+// 6バイトのキーコードは1つのHIDレポートとして送るので、
+// 1バイトごとにセマフォを取り直すと更新途中の状態を
+// core1側が読んで中途半端なレポートを送ってしまう。
+// 6バイトまとめて1回のロックで扱う
 void usb_set_keycode(uint8_t *code)
 {
+    sem_acquire_blocking(&sem);
     for(int i=0; i<6; i++){
-        sem_acquire_blocking(&sem);
         current_keycode[i] = code[i];
-        sem_release(&sem);
     }
+    sem_release(&sem);
 }
 
 bool usb_exist_keycode()
 {
+    bool exist = false;
+    sem_acquire_blocking(&sem);
     for(int i=0; i<6; i++){
-        sem_acquire_blocking(&sem);
         if(current_keycode[i] != 0){
-            sem_release(&sem);
-            return true;
+            exist = true;
+            break;
         }
-        sem_release(&sem);
     }
-    return false;
+    sem_release(&sem);
+    return exist;
 }
 
-uint8_t usb_get_keycode(int index)
+static void usb_copy_keycode(uint8_t *dest)
 {
-    uint8_t code = 0;
     sem_acquire_blocking(&sem);
-    code = current_keycode[index];
+    for(int i=0; i<6; i++){
+        dest[i] = current_keycode[i];
+    }
     sem_release(&sem);
-    return code;
 }
 
 static void send_hid_keycode_report(uint8_t report_id, bool exist_keycode)
@@ -176,9 +181,7 @@ static void send_hid_keycode_report(uint8_t report_id, bool exist_keycode)
       if ( exist_keycode )
       {
         uint8_t keycode[6] = { 0 };
-        for(int i=0; i<6; i++){
-            keycode[i] = usb_get_keycode(i);
-        }
+        usb_copy_keycode(keycode);
 
         tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
         has_keyboard_key = true;
