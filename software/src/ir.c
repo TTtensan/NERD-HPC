@@ -5,7 +5,9 @@
 #include "hardware/pwm.h"
 #include "ir.h"
 
-uint64_t arry_ir_interval[1280] = {0};
+#define IR_INTERVAL_MAX 1280
+
+uint64_t arry_ir_interval[IR_INTERVAL_MAX] = {0};
 
 void ir_put(bool value) {
   if(value) {
@@ -20,19 +22,24 @@ bool ir_get() {
 }
 
 void ir_copy() {
-    for(int i=0; i<1280; i++) arry_ir_interval[i] = 0;
+    for(int i=0; i<IR_INTERVAL_MAX; i++) arry_ir_interval[i] = 0;
     //to_us_since_boot(get_absolute_time());
     //printf( "%" PRIu64 "\n", to_us_since_boot(get_absolute_time()));
     int index = 0;
     while(true) {
+        // 1回のループでON区間とOFF区間の2要素を書くので、
+        // 2要素分の空きが無くなった時点で打ち切る。
+        // 以前はメッセージを出すだけで書き込みを続けており、
+        // 長い信号を受けると配列の外を壊していた
+        if(index > IR_INTERVAL_MAX - 2) {
+            printf("index over flow\n");
+            return;
+        }
         if(!gpio_get(PIN_IR_RX)) {
             uint64_t count_start = to_us_since_boot(get_absolute_time());
             while(!gpio_get(PIN_IR_RX));
             arry_ir_interval[index] = to_us_since_boot(get_absolute_time()) - count_start;
             index++;
-            if(index == 1270) {
-                printf("index over flow\n");
-            }
             count_start = to_us_since_boot(get_absolute_time());
             while(gpio_get(PIN_IR_RX)) {
                 if(!gpio_get(PIN_SW))
@@ -54,7 +61,7 @@ void ir_send_copied() {
     printf("send\n");
     sleep_ms(500);
     bool on_off = true;
-    for(int i=0; i<1280; i++) {
+    for(int i=0; i<IR_INTERVAL_MAX; i++) {
         pwm_set_enabled(pwm_gpio_to_slice_num(PIN_IR_TX), on_off);
         on_off = !on_off;
         if(arry_ir_interval[i] == 0) return;
