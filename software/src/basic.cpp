@@ -1711,6 +1711,11 @@ void isetf() {
 
   c_code = iexp();
   if(err) return;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return;
+  }
   cip++;
 
   if (*cip != I_STR) {
@@ -1729,7 +1734,7 @@ void isetf() {
   for (i = 0; i < len; i++) buf[i] = *cip++;
   buf[i] = 0;
 
-  if (*cip != I_EOL) {
+  if (*cip != I_EOL && *cip != I_SEMI) { //もし文末でなければ
     err = ERR_SYNTAX;
     return;
   }
