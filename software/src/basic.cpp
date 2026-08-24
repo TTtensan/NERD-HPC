@@ -2201,6 +2201,9 @@ unsigned char* iexe() {
     if ((++esc_check_count & (ESC_CHECK_INTERVAL - 1)) == 0)
       if (c_kbhit()) //もし未読文字があったら
         if (c_getch() == 27) { //読み込んでもし［ESC］キーだったら
+#ifdef _SPEAKER_
+          stop_sound(); //鳴りっぱなしにならないよう、STPSNDと同じ処理で音を止める
+#endif
           err = ERR_ESC; //エラー番号をセット
           break; //打ち切る
         }
