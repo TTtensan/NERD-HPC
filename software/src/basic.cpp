@@ -43,7 +43,7 @@
 // Depending on device functions
 // TO-DO Rewrite these functions to fit your machine
 #define STR_EDITION "NERD HPC"
-#define STR_VERSION "1.13.6"
+#define STR_VERSION "1.13.7"
 
 // Terminal control
 #define c_putch(c) putch2(c)
@@ -1711,6 +1711,11 @@ void isetf() {
 
   c_code = iexp();
   if(err) return;
+
+  if (*cip != I_COMMA) {
+    err = ERR_SYNTAX;
+    return;
+  }
   cip++;
 
   if (*cip != I_STR) {
@@ -1729,7 +1734,7 @@ void isetf() {
   for (i = 0; i < len; i++) buf[i] = *cip++;
   buf[i] = 0;
 
-  if (*cip != I_EOL) {
+  if (*cip != I_EOL && *cip != I_SEMI) { //もし文末でなければ
     err = ERR_SYNTAX;
     return;
   }
@@ -2196,6 +2201,9 @@ unsigned char* iexe() {
     if ((++esc_check_count & (ESC_CHECK_INTERVAL - 1)) == 0)
       if (c_kbhit()) //もし未読文字があったら
         if (c_getch() == 27) { //読み込んでもし［ESC］キーだったら
+#ifdef _SPEAKER_
+          stop_sound(); //鳴りっぱなしにならないよう、STPSNDと同じ処理で音を止める
+#endif
           err = ERR_ESC; //エラー番号をセット
           break; //打ち切る
         }
